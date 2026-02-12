@@ -572,6 +572,54 @@ def api_tasa_actual():
     )
 
 
+# ---------- API: Clientes ----------
+def _cliente_to_dict(cliente: Cliente):
+    return {
+        'id': cliente.id,
+        'nombre': cliente.nombre,
+        'apellido': cliente.apellido,
+        'email': cliente.email,
+        'telefono': cliente.telefono,
+        'direccion': cliente.direccion,
+        'documento_identidad': cliente.documento_identidad,
+    }
+
+
+@api.route('/clientes', methods=['GET'])
+def api_lista_clientes():
+    """Lista todos los clientes en formato JSON."""
+    clientes = Cliente.query.all()
+    return jsonify([_cliente_to_dict(c) for c in clientes])
+
+
+@api.route('/clientes', methods=['POST'])
+def api_crear_cliente():
+    """Crea un cliente (para uso de n8n o desde el modal en la UI)."""
+    data = request.get_json(silent=True) or {}
+
+    requeridos = ['nombre', 'apellido', 'documento_identidad']
+    faltantes = [c for c in requeridos if c not in data]
+    if faltantes:
+        return jsonify({'error': f'Faltan campos requeridos: {", ".join(faltantes)}'}), 400
+
+    try:
+        cliente = Cliente(
+            nombre=data['nombre'],
+            apellido=data['apellido'],
+            email=data.get('email'),
+            telefono=data.get('telefono'),
+            direccion=data.get('direccion'),
+            documento_identidad=data['documento_identidad'],
+        )
+        db.session.add(cliente)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'No se pudo crear el cliente', 'detalle': str(e)}), 500
+
+    return jsonify(_cliente_to_dict(cliente)), 201
+
+
 # ---------- API: Reservaciones ----------
 def _reservacion_to_dict(reservacion: Reservacion):
     return {
@@ -688,6 +736,13 @@ def _venta_to_dict(venta: Venta):
     }
 
 
+@api.route('/ventas', methods=['GET'])
+def api_lista_ventas():
+    """Lista todas las ventas/compras en formato JSON."""
+    ventas = Venta.query.all()
+    return jsonify([_venta_to_dict(v) for v in ventas])
+
+
 @api.route('/ventas/<int:venta_id>', methods=['GET'])
 def api_detalle_venta(venta_id):
     """Devuelve el detalle de una venta/compra."""
@@ -796,13 +851,11 @@ def lista_reservaciones():
     reservaciones = Reservacion.query.all()
     clientes = Cliente.query.all()
     habitaciones = Habitacion.query.all()
-    usuarios = Usuario.query.all()
     return render_template(
         'reservaciones/lista.html',
         reservaciones=reservaciones,
         clientes=clientes,
         habitaciones=habitaciones,
-        usuarios=usuarios,
     )
 
 
@@ -811,28 +864,32 @@ def lista_reservaciones():
 def crear_reservacion():
     clientes = Cliente.query.all()
     habitaciones = Habitacion.query.all()
-    usuarios = Usuario.query.all()
     tasa_actual = _obtener_tasa_actual()
 
     if request.method == 'POST':
         cliente_id = request.form.get('cliente_id')
         habitacion_id = request.form.get('habitacion_id')
-        usuario_id = request.form.get('usuario_id')
         fecha_entrada = request.form.get('fecha_entrada')
         fecha_salida = request.form.get('fecha_salida')
         estado = request.form.get('estado', 'confirmada')
         observaciones = request.form.get('observaciones')
+
         if not tasa_actual:
             flash('No hay una tasa de cambio activa. Registre una antes de continuar.', 'danger')
             return redirect(url_for('main.lista_tasas'))
 
-        precio_por_noche_usd = _to_decimal(request.form.get('precio_por_noche_usd') or 0)
+        habitacion = Habitacion.query.get_or_404(habitacion_id)
+        if not habitacion.tipo:
+            flash('La habitación seleccionada no tiene un tipo asociado con precio definido.', 'danger')
+            return redirect(url_for('main.lista_reservaciones'))
+
+        precio_por_noche_usd = _to_decimal(habitacion.tipo.precio_por_noche_usd or 0)
         precio_por_noche_bs = precio_por_noche_usd * _to_decimal(tasa_actual.tasa_bs_por_usd)
 
         nueva = Reservacion(
             cliente_id=cliente_id,
             habitacion_id=habitacion_id,
-            usuario_id=usuario_id,
+            usuario_id=current_user.id,
             fecha_entrada=fecha_entrada,
             fecha_salida=fecha_salida,
             estado=estado,
@@ -849,7 +906,6 @@ def crear_reservacion():
         'reservaciones/form.html',
         clientes=clientes,
         habitaciones=habitaciones,
-        usuarios=usuarios,
         tasa_actual=tasa_actual,
     )
 
@@ -860,13 +916,11 @@ def editar_reservacion(reservacion_id):
     reservacion = Reservacion.query.get_or_404(reservacion_id)
     clientes = Cliente.query.all()
     habitaciones = Habitacion.query.all()
-    usuarios = Usuario.query.all()
     tasa_actual = _obtener_tasa_actual()
 
     if request.method == 'POST':
         reservacion.cliente_id = request.form.get('cliente_id')
         reservacion.habitacion_id = request.form.get('habitacion_id')
-        reservacion.usuario_id = request.form.get('usuario_id')
         reservacion.fecha_entrada = request.form.get('fecha_entrada')
         reservacion.fecha_salida = request.form.get('fecha_salida')
         reservacion.estado = request.form.get('estado', 'confirmada')
@@ -875,7 +929,12 @@ def editar_reservacion(reservacion_id):
             flash('No hay una tasa de cambio activa. Registre una antes de continuar.', 'danger')
             return redirect(url_for('main.lista_tasas'))
 
-        reservacion.precio_por_noche_usd = _to_decimal(request.form.get('precio_por_noche_usd') or 0)
+        habitacion = Habitacion.query.get_or_404(reservacion.habitacion_id)
+        if not habitacion.tipo:
+            flash('La habitación seleccionada no tiene un tipo asociado con precio definido.', 'danger')
+            return redirect(url_for('main.lista_reservaciones'))
+
+        reservacion.precio_por_noche_usd = _to_decimal(habitacion.tipo.precio_por_noche_usd or 0)
         reservacion.precio_por_noche_bs = reservacion.precio_por_noche_usd * _to_decimal(tasa_actual.tasa_bs_por_usd)
 
         db.session.commit()
@@ -887,7 +946,6 @@ def editar_reservacion(reservacion_id):
         reservacion=reservacion,
         clientes=clientes,
         habitaciones=habitaciones,
-        usuarios=usuarios,
         tasa_actual=tasa_actual,
     )
 

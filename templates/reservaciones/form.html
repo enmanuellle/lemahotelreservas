@@ -29,8 +29,13 @@
                 <form method="post">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Cliente</label>
-                            <select name="cliente_id" class="form-select" required>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <label class="form-label mb-0">Cliente</label>
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">
+                                    <i class="bx bx-user-plus"></i> Nuevo Cliente
+                                </button>
+                            </div>
+                            <select id="selectCliente" name="cliente_id" class="form-select" required>
                                 <option value="">Seleccione...</option>
                                 {% for c in clientes %}
                                 <option value="{{ c.id }}"
@@ -55,16 +60,8 @@
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Usuario</label>
-                            <select name="usuario_id" class="form-select" required>
-                                <option value="">Seleccione...</option>
-                                {% for u in usuarios %}
-                                <option value="{{ u.id }}"
-                                    {% if reservacion and reservacion.usuario_id == u.id %}selected{% endif %}>
-                                    {{ u.nombre }} {{ u.apellido }} ({{ u.rol }})
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <label class="form-label">Operador</label>
+                            <input type="text" class="form-control" value="{{ current_user.nombre }} {{ current_user.apellido }} ({{ current_user.rol }})" readonly>
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Fecha de Entrada</label>
@@ -80,8 +77,9 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Precio por noche (USD)</label>
-                            <input type="number" step="0.01" name="precio_por_noche_usd" class="form-control"
-                                   value="{{ reservacion.precio_por_noche_usd if reservacion else '' }}">
+                            <input type="number" step="0.01" class="form-control"
+                                   value="{{ reservacion.precio_por_noche_usd if reservacion else '' }}" readonly
+                                   placeholder="Se tomará del tipo de habitación">
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Precio por noche (Bs)</label>
@@ -114,5 +112,117 @@
         </div>
     </div>
 </div>
+
+<!-- Modal: Nuevo Cliente -->
+<div class="modal fade" id="modalNuevoCliente" tabindex="-1" aria-labelledby="modalNuevoClienteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNuevoClienteLabel">Nuevo Cliente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNuevoCliente">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" id="nuevoClienteNombre" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Apellido</label>
+                            <input type="text" id="nuevoClienteApellido" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Documento de Identidad</label>
+                        <input type="text" id="nuevoClienteDocumento" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="nuevoClienteEmail" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Teléfono</label>
+                        <input type="text" id="nuevoClienteTelefono" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Dirección</label>
+                        <textarea id="nuevoClienteDireccion" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bx bx-save"></i> Guardar Cliente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const formNuevoCliente = document.getElementById('formNuevoCliente');
+    const selectCliente = document.getElementById('selectCliente');
+
+    if (formNuevoCliente && selectCliente) {
+        formNuevoCliente.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            const payload = {
+                nombre: document.getElementById('nuevoClienteNombre').value.trim(),
+                apellido: document.getElementById('nuevoClienteApellido').value.trim(),
+                documento_identidad: document.getElementById('nuevoClienteDocumento').value.trim(),
+                email: document.getElementById('nuevoClienteEmail').value.trim() || null,
+                telefono: document.getElementById('nuevoClienteTelefono').value.trim() || null,
+                direccion: document.getElementById('nuevoClienteDireccion').value.trim() || null,
+            };
+
+            if (!payload.nombre || !payload.apellido || !payload.documento_identidad) {
+                alert('Nombre, apellido y documento son obligatorios.');
+                return;
+            }
+
+            fetch('/api/clientes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            })
+                .then(async (response) => {
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        const msg = data.error || 'Error al crear el cliente.';
+                        alert(msg);
+                        return;
+                    }
+
+                    // Agregar el cliente al select y seleccionarlo
+                    const option = document.createElement('option');
+                    option.value = data.id;
+                    option.textContent = data.nombre + ' ' + data.apellido + ' - ' + data.documento_identidad;
+                    option.selected = true;
+                    selectCliente.appendChild(option);
+
+                    // Cerrar el modal
+                    const modalEl = document.getElementById('modalNuevoCliente');
+                    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                    modal.hide();
+
+                    // Limpiar formulario
+                    formNuevoCliente.reset();
+                })
+                .catch(() => {
+                    alert('Error de conexión al crear el cliente.');
+                });
+        });
+    }
+});
+</script>
+{% endblock %}
+
 {% endblock %}
 
