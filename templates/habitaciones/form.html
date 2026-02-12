@@ -1,0 +1,69 @@
+{% extends 'dashboard.html' %}
+
+{% block title %}{{ 'Editar' if habitacion else 'Nueva' }} Habitación · Hotel System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-3 d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">{{ 'Editar' if habitacion else 'Nueva' }} Habitación</h4>
+        <a href="{{ url_for('main.lista_habitaciones') }}" class="btn btn-outline-secondary">
+            <i class="bx bx-arrow-back"></i> Volver
+        </a>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Datos de la Habitación</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Número</label>
+                            <input type="text" name="numero" class="form-control" required
+                                   value="{{ habitacion.numero if habitacion else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Piso</label>
+                            <input type="text" name="piso" class="form-control"
+                                   value="{{ habitacion.piso if habitacion else '' }}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Habitación</label>
+                        <select name="tipo_habitacion_id" class="form-select" required>
+                            <option value="">Seleccione...</option>
+                            {% for tipo in tipos %}
+                            <option value="{{ tipo.id }}"
+                                {% if habitacion and habitacion.tipo_habitacion_id == tipo.id %}selected{% endif %}>
+                                {{ tipo.nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Estado</label>
+                        <select name="estado" class="form-select">
+                            {% set estado_actual = habitacion.estado if habitacion else 'disponible' %}
+                            <option value="disponible" {% if estado_actual == 'disponible' %}selected{% endif %}>Disponible</option>
+                            <option value="ocupada" {% if estado_actual == 'ocupada' %}selected{% endif %}>Ocupada</option>
+                            <option value="mantenimiento" {% if estado_actual == 'mantenimiento' %}selected{% endif %}>Mantenimiento</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notas</label>
+                        <textarea name="notas" class="form-control" rows="3">{{ habitacion.notas if habitacion else '' }}</textarea>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bx bx-save"></i> Guardar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

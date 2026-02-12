@@ -1,0 +1,67 @@
+{% extends 'dashboard.html' %}
+
+{% block title %}Habitaciones · Hotel System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Habitaciones</h4>
+        <a href="{{ url_for('main.crear_habitacion') }}" class="btn btn-primary">
+            <i class="bx bx-plus"></i> Nueva Habitación
+        </a>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Listado</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Número</th>
+                                <th>Piso</th>
+                                <th>Tipo</th>
+                                <th>Estado</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for habitacion in habitaciones %}
+                            <tr>
+                                <td>{{ habitacion.id }}</td>
+                                <td>{{ habitacion.numero }}</td>
+                                <td>{{ habitacion.piso }}</td>
+                                <td>{{ habitacion.tipo.nombre if habitacion.tipo else '-' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if habitacion.estado == 'disponible' else 'warning' if habitacion.estado == 'ocupada' else 'secondary' }}">
+                                        {{ habitacion.estado|capitalize }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <a href="{{ url_for('main.editar_habitacion', habitacion_id=habitacion.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bx bx-edit"></i>
+                                    </a>
+                                    <form action="{{ url_for('main.eliminar_habitacion', habitacion_id=habitacion.id) }}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar esta habitación?');">
+                                            <i class="bx bx-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">No hay habitaciones registradas.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

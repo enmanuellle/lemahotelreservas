@@ -1,0 +1,73 @@
+{% extends 'dashboard.html' %}
+
+{% block title %}Ventas · Hotel System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Ventas</h4>
+        <a href="{{ url_for('main.crear_venta') }}" class="btn btn-primary">
+            <i class="bx bx-plus"></i> Nueva Venta
+        </a>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Listado</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Fecha</th>
+                                <th>Cliente</th>
+                                <th>Usuario</th>
+                                <th>Tipo</th>
+                                <th>Total (USD)</th>
+                                <th>Total (Bs)</th>
+                                <th>Estado</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for v in ventas %}
+                            <tr>
+                                <td>{{ v.id }}</td>
+                                <td>{{ v.fecha_venta }}</td>
+                                <td>{{ v.cliente.nombre }} {{ v.cliente.apellido }}</td>
+                                <td>{{ v.usuario.nombre }} {{ v.usuario.apellido }}</td>
+                                <td>{{ v.tipo|replace('_', ' ')|capitalize }}</td>
+                                <td>{{ v.total_usd }}</td>
+                                <td>{{ v.total_bs }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if v.estado == 'pagado' else 'warning' if v.estado == 'pendiente' else 'danger' }}">
+                                        {{ v.estado|capitalize }}
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <a href="{{ url_for('main.editar_venta', venta_id=v.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bx bx-edit"></i>
+                                    </a>
+                                    <form action="{{ url_for('main.eliminar_venta', venta_id=v.id) }}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar esta venta?');">
+                                            <i class="bx bx-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="9" class="text-center text-muted">No hay ventas registradas.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,73 @@
+{% extends 'dashboard.html' %}
+
+{% block title %}Detalles de Ventas · Hotel System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Detalles de Ventas</h4>
+        <a href="{{ url_for('main.crear_venta_detalle') }}" class="btn btn-primary">
+            <i class="bx bx-plus"></i> Nuevo Detalle
+        </a>
+    </div>
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Listado</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Venta</th>
+                                <th>Producto / Plan</th>
+                                <th>Cantidad</th>
+                                <th>Precio (USD)</th>
+                                <th>Total (USD)</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in detalles %}
+                            <tr>
+                                <td>{{ d.id }}</td>
+                                <td>#{{ d.venta_id }}</td>
+                                <td>
+                                    {% if d.producto_restaurante %}
+                                        {{ d.producto_restaurante.nombre }}
+                                    {% elif d.plan_turistico %}
+                                        {{ d.plan_turistico.nombre }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ d.cantidad }}</td>
+                                <td>{{ d.precio_unitario_usd }}</td>
+                                <td>{{ d.total_usd }}</td>
+                                <td class="text-end">
+                                    <a href="{{ url_for('main.editar_venta_detalle', detalle_id=d.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bx bx-edit"></i>
+                                    </a>
+                                    <form action="{{ url_for('main.eliminar_venta_detalle', detalle_id=d.id) }}" method="post" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar este detalle de venta?');">
+                                            <i class="bx bx-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">No hay detalles de ventas registrados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

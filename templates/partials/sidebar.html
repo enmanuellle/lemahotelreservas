@@ -1,0 +1,241 @@
+<!-- Sidebar -->
+<div class="sidebar-wrapper" id="sidebar-wrapper" data-simplebar="true">
+    <div class="sidebar-header">
+        <div>
+            <h4 class="logo-text">Hotel System</h4>
+        </div>
+        <div class="toggle-icon ms-auto"><i class='bx bx-first-page'></i></div>
+    </div>
+    <!--navigation-->
+    <ul class="metismenu" id="menu">
+        <!-- Dashboard -->
+        <li>
+            <a href="{{ url_for('main.dashboard') }}">
+                <div class="parent-icon"><i class='bx bx-home'></i></div>
+                <div class="menu-title">Dashboard</div>
+            </a>
+        </li>
+
+        <!-- Módulo de Habitaciones -->
+        <li>
+            <a href="javascript:;" class="has-arrow">
+                <div class="parent-icon"><i class='bx bx-bed'></i></div>
+                <div class="menu-title">Habitaciones</div>
+            </a>
+            <ul>
+                <li>
+                    <a href="{{ url_for('main.lista_tipos_habitacion') }}">
+                        <i class="bx bx-category"></i> Tipos de Habitación
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.lista_habitaciones') }}">
+                        <i class="bx bx-building-house"></i> Habitaciones
+                    </a>
+                </li>
+            </ul>
+        </li>
+
+        <!-- Módulo de Reservaciones -->
+        <li>
+            <a href="javascript:;" class="has-arrow">
+                <div class="parent-icon"><i class='bx bx-calendar-check'></i></div>
+                <div class="menu-title">Reservaciones</div>
+            </a>
+            <ul>
+                <li>
+                    <a href="{{ url_for('main.crear_reservacion') }}">
+                        <i class="bx bx-plus-circle"></i> Nueva Reservación
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.lista_reservaciones') }}">
+                        <i class="bx bx-list-ul"></i> Gestionar Reservaciones
+                    </a>
+                </li>
+            </ul>
+        </li>
+
+        <!-- Módulo de Clientes -->
+        <li>
+            <a href="javascript:;" class="has-arrow">
+                <div class="parent-icon"><i class='bx bx-user-circle'></i></div>
+                <div class="menu-title">Clientes</div>
+            </a>
+            <ul>
+                <li>
+                    <a href="{{ url_for('main.crear_cliente') }}">
+                        <i class="bx bx-plus"></i> Nuevo Cliente
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.lista_clientes') }}">
+                        <i class="bx bx-list-ul"></i> Gestionar Clientes
+                    </a>
+                </li>
+            </ul>
+        </li>
+
+        <!-- Módulo de Productos y Servicios -->
+        <li>
+            <a href="javascript:;" class="has-arrow">
+                <div class="parent-icon"><i class='bx bx-package'></i></div>
+                <div class="menu-title">Productos / Servicios</div>
+            </a>
+            <ul>
+                <li>
+                    <a href="{{ url_for('main.lista_planes_turisticos') }}">
+                        <i class="bx bx-map"></i> Planes Turísticos
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.lista_productos_restaurante') }}">
+                        <i class="bx bx-restaurant"></i> Productos de Restaurante
+                    </a>
+                </li>
+            </ul>
+        </li>
+
+        <!-- Módulo de Ventas -->
+        <li>
+            <a href="javascript:;" class="has-arrow">
+                <div class="parent-icon"><i class='bx bx-cart'></i></div>
+                <div class="menu-title">Ventas</div>
+            </a>
+            <ul>
+                <li>
+                    <a href="{{ url_for('main.lista_ventas') }}">
+                        <i class="bx bx-list-ul"></i> Ver Ventas
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.crear_venta') }}">
+                        <i class="bx bx-plus-circle"></i> Registrar Venta
+                    </a>
+                </li>
+            </ul>
+        </li>
+
+        <!-- Módulo de Tasas de Cambio -->
+        <li>
+            <a href="{{ url_for('main.lista_tasas') }}">
+                <div class="parent-icon"><i class='bx bx-dollar'></i></div>
+                <div class="menu-title">Tasas de Cambio</div>
+            </a>
+        </li>
+
+        <!-- Módulo de Usuarios (solo admin) -->
+        {% if current_user.rol == 'admin' %}
+        <li>
+            <a href="javascript:;" class="has-arrow">
+                <div class="parent-icon"><i class='bx bx-user'></i></div>
+                <div class="menu-title">Usuarios</div>
+            </a>
+            <ul>
+                <li>
+                    <a href="">
+                        <i class="bx bx-plus"></i> Crear Usuario
+                    </a>
+                </li>
+                <li>
+                    <a href="">
+                        <i class="bx bx-list-ul"></i> Gestionar Usuarios
+                    </a>
+                </li>
+            </ul>
+        </li>
+        {% endif %}
+
+        <!-- Configuración y Perfil -->
+        <li>
+            <a href="javascript:;" class="has-arrow">
+                <div class="parent-icon"><i class='bx bx-cog'></i></div>
+                <div class="menu-title">Configuración</div>
+            </a>
+            <ul>
+                <li>
+                    <a href="">
+                        <i class="bx bx-user"></i> Mi Perfil
+                    </a>
+                </li>
+                <li>
+                    <a href="">
+                        <i class="bx bx-lock"></i> Cambiar Contraseña
+                    </a>
+                </li>
+            </ul>
+        </li>
+
+        <!-- Cerrar Sesión -->
+        <li>
+            <a href="{{ url_for('auth.logout') }}">
+                <div class="parent-icon"><i class='bx bx-log-out'></i></div>
+                <div class="menu-title">Cerrar Sesión</div>
+            </a>
+        </li>
+    </ul>
+</div>
+<!--end sidebar wrapper -->
+
+<!-- Page Wrapper -->
+<div class="page-wrapper">
+    <!-- Header -->
+    <header>
+        <div class="topbar d-flex align-items-center">
+            <nav class="navbar navbar-expand">
+                <div class="mobile-toggle-menu"><i class='bx bx-menu'></i></div>
+
+                <!-- Barra de búsqueda -->
+                <div class="search-bar flex-grow-1">
+                    <div class="position-relative search-bar-box">
+                        <input type="text" class="form-control search-control" placeholder="Buscar...">
+                        <span class="position-absolute top-50 search-show translate-middle-y"><i class='bx bx-search'></i></span>
+                        <span class="position-absolute top-50 search-close translate-middle-y"><i class='bx bx-x'></i></span>
+                    </div>
+                </div>
+
+                <div class="top-menu ms-auto">
+                    <ul class="navbar-nav align-items-center">
+                        <!-- Notificaciones (opcional, puedes agregar datos dinámicos después) -->
+                        <li class="nav-item dropdown dropdown-large">
+                            <a class="nav-link dropdown-toggle dropdown-toggle-nocaret position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span class="alert-count">0</span><i class='bx bx-bell'></i>
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-end">
+                                <a href="javascript:;">
+                                    <div class="msg-header">
+                                        <p class="msg-header-title">Notificaciones</p>
+                                        <p class="msg-header-clear ms-auto">Marcar como leídas</p>
+                                    </div>
+                                </a>
+                                <div class="header-notifications-list">
+                                    <p class="text-center py-3">No hay notificaciones nuevas</p>
+                                </div>
+                                <a href="javascript:;">
+                                    <div class="text-center msg-footer">Ver Todas</div>
+                                </a>
+                            </div>
+                        </li>
+
+                        <!-- Usuario -->
+                        <li class="nav-item dropdown dropdown-large">
+                            <a class="nav-link dropdown-toggle dropdown-toggle-nocaret position-relative d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <img src="https://ui-avatars.com/api/?name={{ current_user.nombre }}+{{ current_user.apellido }}&background=1e3a5f&color=fff&size=128" class="user-img" alt="user avatar" style="width: 40px; height: 40px; border-radius: 50%;">
+                                <div class="user-info ps-3">
+                                    <p class="user-name mb-0">{{ current_user.nombre }} {{ current_user.apellido }}</p>
+                                    <p class="designattion mb-0">{{ current_user.rol|capitalize }}</p>
+                                </div>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#"><i class="bx bx-user"></i><span>Perfil</span></a></li>
+                                <li><a class="dropdown-item" href="#"><i class="bx bx-cog"></i><span>Configuración</span></a></li>
+                                <li><div class="dropdown-divider mb-0"></div></li>
+                                <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bx bx-log-out-circle"></i><span>Cerrar Sesión</span></a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+    </header>
+    <!--end header -->

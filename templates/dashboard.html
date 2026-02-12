@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='assets/images/favicon.ico') }}" />
+    
+    <!-- CSS -->
+    <!-- Bootstrap CSS -->
+    <link href="{{ url_for('static', filename='assets/css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='assets/css/bootstrap-extended.css') }}" rel="stylesheet">
+    
+    <!-- SimpleBar CSS -->
+    <link href="{{ url_for('static', filename='assets/plugins/simplebar/css/simplebar.css') }}" rel="stylesheet">
+    
+    <!-- MetisMenu CSS -->
+    <link href="{{ url_for('static', filename='assets/plugins/metismenu/css/metisMenu.min.css') }}" rel="stylesheet">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    
+    <!-- App CSS -->
+    <link href="{{ url_for('static', filename='assets/css/app.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='assets/css/icons.css') }}" rel="stylesheet">
+    
+    <!-- Theme CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='assets/css/dark-theme.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='assets/css/semi-dark.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='assets/css/header-colors.css') }}" />
+    
+    <!-- Título dinámico -->
+    <title>{% block title %}Hotel System · Gestión de Reservaciones{% endblock %}</title>
+    
+    <!-- Bloques para CSS extra por página -->
+    {% block extra_css %}{% endblock %}
+    
+    
+        /* Puedes agregar más estilos base aquí */
+    </style>
+</head>
+
+<body>
+    <!--wrapper-->
+    <div class="wrapper">
+        {% include 'partials/sidebar.html' %}
+
+        <!-- Page Wrapper -->
+       
+            <!-- Page Content -->
+            <div class="page-content">
+                <div class="container-fluid">
+                    
+                    <!-- Flash messages (global) -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <!-- Contenido principal de cada página -->
+                    {% block content %}{% endblock %}
+                    
+                </div>
+                <!-- End Container -->
+            </div>
+            <!-- End Page Content -->
+        
+        <!-- End Page Wrapper -->
+    </div>
+    <!--end wrapper-->
+
+    <!-- JavaScript -->
+    <!-- Bootstrap JS -->
+    <script src="{{ url_for('static', filename='assets/js/bootstrap.bundle.min.js') }}"></script>
+    
+    <!-- jQuery -->
+    <script src="{{ url_for('static', filename='assets/js/jquery.min.js') }}"></script>
+    
+    <!-- SimpleBar JS -->
+    <script src="{{ url_for('static', filename='assets/plugins/simplebar/js/simplebar.min.js') }}"></script>
+    
+    <!-- MetisMenu JS -->
+    <script src="{{ url_for('static', filename='assets/plugins/metismenu/js/metisMenu.min.js') }}"></script>
+    
+    <!-- App JS -->
+    <script src="{{ url_for('static', filename='assets/js/app.js') }}"></script>
+
+    <!-- Scripts base para el funcionamiento del layout -->
+    <script>
+        $(document).ready(function() {
+            // Inicializar SimpleBar en el sidebar
+            if (document.getElementById('sidebar-wrapper')) {
+                new SimpleBar(document.getElementById('sidebar-wrapper'));
+            }
+
+            // Inicializar MetisMenu
+            if ($('#menu').length) {
+                $('#menu').metisMenu();
+            }
+
+            // Toggle del sidebar (responsive)
+            $('.toggle-icon, .mobile-toggle-menu').on('click', function() {
+                $('.sidebar-wrapper, .page-wrapper').toggleClass('sidebar-hidden');
+            });
+        });
+    </script>
+    
+    <!-- Bloque para scripts extra por página -->
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
