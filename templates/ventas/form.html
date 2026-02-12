@@ -1,6 +1,6 @@
 {% extends 'dashboard.html' %}
 
-{% block title %}{{ 'Editar' if venta else 'Nueva' }} Venta · Hotel System{% endblock %}
+{% block title %}{{ 'Editar' if venta else 'Nueva' }} Venta · lemahotel{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -11,7 +11,7 @@
         </a>
     </div>
 
-    <div class="col-lg-8">
+    <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">Datos de la Venta</h5>
@@ -26,7 +26,7 @@
                 {% endif %}
             </div>
             <div class="card-body">
-                <form method="post">
+                <form method="post" id="formVenta">
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Cliente</label>
@@ -41,92 +41,112 @@
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Usuario</label>
-                            <select name="usuario_id" class="form-select" required>
-                                <option value="">Seleccione...</option>
-                                {% for u in usuarios %}
-                                <option value="{{ u.id }}"
-                                    {% if venta and venta.usuario_id == u.id %}selected{% endif %}>
-                                    {{ u.nombre }} {{ u.apellido }} ({{ u.rol }})
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <label class="form-label">Operador</label>
+                            <input type="text" class="form-control"
+                                   value="{{ current_user.nombre }} {{ current_user.apellido }} ({{ current_user.rol }})" readonly>
                         </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Tipo de Venta</label>
-                        <select name="tipo" class="form-select" required>
-                            {% set tipo_actual = venta.tipo if venta else '' %}
-                            <option value="reservacion" {% if tipo_actual == 'reservacion' %}selected{% endif %}>Reservación</option>
-                            <option value="restaurante" {% if tipo_actual == 'restaurante' %}selected{% endif %}>Restaurante</option>
-                            <option value="plan_turistico" {% if tipo_actual == 'plan_turistico' %}selected{% endif %}>Plan Turístico</option>
-                            <option value="mixta" {% if tipo_actual == 'mixta' %}selected{% endif %}>Mixta</option>
-                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Reservación asociada (opcional)</label>
                         <input type="number" name="reservacion_id" class="form-control"
-                               value="{{ venta.reservacion_id if venta else '' }}">
+                               value="{{ venta.reservacion_id if venta else '' }}" placeholder="ID de reservación">
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Subtotal (USD)</label>
-                            <input type="number" step="0.01" name="subtotal_usd" class="form-control"
-                                   value="{{ venta.subtotal_usd if venta else '' }}">
+
+                    <hr>
+                    <h6 class="mb-3">Ítems de la venta (Planes turísticos y/o Productos)</h6>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small">Tipo</label>
+                            <select id="selTipo" class="form-select">
+                                <option value="plan">Plan turístico</option>
+                                <option value="producto">Producto</option>
+                            </select>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Subtotal (Bs)</label>
-                            <input type="number" step="0.01" class="form-control"
-                                   value="{{ venta.subtotal_bs if venta else '' }}" readonly
-                                   placeholder="Se calculará automáticamente">
+                        <div class="col-md-4">
+                            <label class="form-label small">Ítem</label>
+                            <select id="selPlan" class="form-select">
+                                <option value="">Seleccione plan...</option>
+                                {% for p in planes %}
+                                <option value="{{ p.id }}" data-precio-usd="{{ p.precio_usd }}" data-precio-bs="{{ p.precio_bs }}" data-nombre="{{ p.nombre }}">{{ p.nombre }} — {{ p.precio_usd }} USD</option>
+                                {% endfor %}
+                            </select>
+                            <select id="selProducto" class="form-select d-none">
+                                <option value="">Seleccione producto...</option>
+                                {% for p in productos %}
+                                <option value="{{ p.id }}" data-precio-usd="{{ p.precio_unitario_usd }}" data-precio-bs="{{ p.precio_unitario_bs }}" data-nombre="{{ p.nombre }}">{{ p.nombre }} — {{ p.precio_unitario_usd }} USD</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Cantidad</label>
+                            <input type="number" id="inputCantidad" min="1" value="1" class="form-control">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" id="btnAgregar" class="btn btn-primary w-100">
+                                <i class="bx bx-plus"></i> Añadir
+                            </button>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
+
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Descripción</th>
+                                    <th class="text-center">Cant.</th>
+                                    <th class="text-end">P. unit. (USD)</th>
+                                    <th class="text-end">P. unit. (Bs)</th>
+                                    <th class="text-end">Total (USD)</th>
+                                    <th class="text-end">Total (Bs)</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyItems">
+                            </tbody>
+                        </table>
+                    </div>
+                    <p id="msgSinItems" class="text-muted small mb-3">No hay ítems. Use "Añadir" para agregar planes turísticos o productos.</p>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
                             <label class="form-label">Impuesto (USD)</label>
-                            <input type="number" step="0.01" name="impuesto_usd" class="form-control"
-                                   value="{{ venta.impuesto_usd if venta else '' }}">
+                            <input type="number" step="0.01" name="impuesto_usd" id="impuestoUsd" class="form-control" value="{{ venta.impuesto_usd if venta else '0' }}">
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Impuesto (Bs)</label>
-                            <input type="number" step="0.01" class="form-control"
-                                   value="{{ venta.impuesto_bs if venta else '' }}" readonly
-                                   placeholder="Se calculará automáticamente">
+                        <div class="col-md-4">
+                            <label class="form-label">Subtotal (USD)</label>
+                            <input type="text" id="subtotalUsdDisplay" class="form-control" readonly value="0.00">
                         </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4">
                             <label class="form-label">Total (USD)</label>
-                            <input type="number" step="0.01" name="total_usd" class="form-control"
-                                   value="{{ venta.total_usd if venta else '' }}">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Total (Bs)</label>
-                            <input type="number" step="0.01" class="form-control"
-                                   value="{{ venta.total_bs if venta else '' }}" readonly
-                                   placeholder="Se calculará automáticamente">
+                            <input type="text" id="totalUsdDisplay" class="form-control" readonly value="0.00">
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Método de Pago</label>
-                        <input type="text" name="metodo_pago" class="form-control"
-                               value="{{ venta.metodo_pago if venta else '' }}">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Estado</label>
-                        {% set estado_actual = venta.estado if venta else 'pagado' %}
-                        <select name="estado" class="form-select">
-                            <option value="pagado" {% if estado_actual == 'pagado' %}selected{% endif %}>Pagado</option>
-                            <option value="pendiente" {% if estado_actual == 'pendiente' %}selected{% endif %}>Pendiente</option>
-                            <option value="anulado" {% if estado_actual == 'anulado' %}selected{% endif %}>Anulado</option>
-                        </select>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Método de Pago</label>
+                            <select name="metodo_pago" class="form-select">
+                                <option value="">Seleccione...</option>
+                                {% for valor, etiqueta in metodos_pago %}
+                                <option value="{{ valor }}" {% if venta and venta.metodo_pago == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Estado</label>
+                            {% set estado_actual = venta.estado if venta else 'pagado' %}
+                            <select name="estado" class="form-select">
+                                <option value="pagado" {% if estado_actual == 'pagado' %}selected{% endif %}>Pagado</option>
+                                <option value="pendiente" {% if estado_actual == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                                <option value="anulado" {% if estado_actual == 'anulado' %}selected{% endif %}>Anulado</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Observaciones</label>
-                        <textarea name="observaciones" class="form-control" rows="3">{{ venta.observaciones if venta else '' }}</textarea>
+                        <textarea name="observaciones" class="form-control" rows="2">{{ venta.observaciones if venta else '' }}</textarea>
                     </div>
                     <div class="d-flex justify-content-end">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="btnSubmit">
                             <i class="bx bx-save"></i> Guardar
                         </button>
                     </div>
@@ -135,5 +155,134 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
+<script>
+(function() {
+    var tasaBs = {{ (tasa_actual.tasa_bs_por_usd if tasa_actual else 0) | tojson }};
+    var items = []; // { tipo, id, nombre, cantidad, precioUsd, precioBs, totalUsd, totalBs }
+
+    var selTipo = document.getElementById('selTipo');
+    var selPlan = document.getElementById('selPlan');
+    var selProducto = document.getElementById('selProducto');
+    var inputCantidad = document.getElementById('inputCantidad');
+    var btnAgregar = document.getElementById('btnAgregar');
+    var tbodyItems = document.getElementById('tbodyItems');
+    var msgSinItems = document.getElementById('msgSinItems');
+    var subtotalUsdDisplay = document.getElementById('subtotalUsdDisplay');
+    var totalUsdDisplay = document.getElementById('totalUsdDisplay');
+    var impuestoUsd = document.getElementById('impuestoUsd');
+    var formVenta = document.getElementById('formVenta');
+    var btnSubmit = document.getElementById('btnSubmit');
+
+    function toggleSelects() {
+        var esPlan = selTipo.value === 'plan';
+        selPlan.classList.toggle('d-none', !esPlan);
+        selProducto.classList.toggle('d-none', esPlan);
+    }
+    selTipo.addEventListener('change', toggleSelects);
+    toggleSelects();
+
+    function getSelectActual() {
+        return selTipo.value === 'plan' ? selPlan : selProducto;
+    }
+
+    function agregarFila() {
+        var sel = getSelectActual();
+        var opt = sel.options[sel.selectedIndex];
+        if (!opt || !opt.value) return;
+        var cantidad = parseInt(inputCantidad.value, 10) || 1;
+        if (cantidad < 1) cantidad = 1;
+        var precioUsd = parseFloat(opt.getAttribute('data-precio-usd')) || 0;
+        var precioBs = parseFloat(opt.getAttribute('data-precio-bs')) || (precioUsd * tasaBs);
+        var nombre = opt.getAttribute('data-nombre') || opt.text;
+        var totalUsd = precioUsd * cantidad;
+        var totalBs = precioBs * cantidad;
+        items.push({
+            tipo: selTipo.value,
+            id: opt.value,
+            nombre: nombre,
+            cantidad: cantidad,
+            precioUsd: precioUsd,
+            precioBs: precioBs,
+            totalUsd: totalUsd,
+            totalBs: totalBs
+        });
+        renderItems();
+        sel.selectedIndex = 0;
+        inputCantidad.value = 1;
+    }
+
+    function quitarFila(idx) {
+        items.splice(idx, 1);
+        renderItems();
+    }
+
+    function renderItems() {
+        tbodyItems.innerHTML = '';
+        items.forEach(function(it, idx) {
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td>' + (it.nombre || '') + '</td>' +
+                '<td class="text-center">' + it.cantidad + '</td>' +
+                '<td class="text-end">' + it.precioUsd.toFixed(2) + '</td>' +
+                '<td class="text-end">' + it.precioBs.toFixed(2) + '</td>' +
+                '<td class="text-end">' + it.totalUsd.toFixed(2) + '</td>' +
+                '<td class="text-end">' + it.totalBs.toFixed(2) + '</td>' +
+                '<td><button type="button" class="btn btn-sm btn-outline-danger quitar-item" data-idx="' + idx + '"><i class="bx bx-trash"></i></button></td>';
+            tbodyItems.appendChild(tr);
+        });
+        msgSinItems.style.display = items.length ? 'none' : 'block';
+
+        var subtotal = items.reduce(function(s, it) { return s + it.totalUsd; }, 0);
+        var impuesto = parseFloat(impuestoUsd.value) || 0;
+        var total = subtotal + impuesto;
+        subtotalUsdDisplay.value = subtotal.toFixed(2);
+        totalUsdDisplay.value = total.toFixed(2);
+
+        tbodyItems.querySelectorAll('.quitar-item').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                quitarFila(parseInt(btn.getAttribute('data-idx'), 10));
+            });
+        });
+    }
+
+    impuestoUsd.addEventListener('input', renderItems);
+
+    btnAgregar.addEventListener('click', agregarFila);
+
+    formVenta.addEventListener('submit', function() {
+        items.forEach(function(it, idx) {
+            var inpTipo = document.createElement('input');
+            inpTipo.type = 'hidden';
+            inpTipo.name = 'item_tipo';
+            inpTipo.value = it.tipo;
+            formVenta.appendChild(inpTipo);
+            var inpId = document.createElement('input');
+            inpId.type = 'hidden';
+            inpId.name = 'item_id';
+            inpId.value = it.id;
+            formVenta.appendChild(inpId);
+            var inpCant = document.createElement('input');
+            inpCant.type = 'hidden';
+            inpCant.name = 'item_cantidad';
+            inpCant.value = it.cantidad;
+            formVenta.appendChild(inpCant);
+        });
+        if (items.length === 0) {
+            alert('Debe agregar al menos un ítem (plan turístico o producto).');
+            return false;
+        }
+        return true;
+    });
+
+    // Cargar ítems existentes al editar
+    {% if detalles_edicion %}
+    (function() {
+        var datos = {{ detalles_edicion | tojson }};
+        datos.forEach(function(it) { items.push(it); });
+        renderItems();
+    })();
+    {% endif %}
+})();
+</script>
+{% endblock %}

@@ -36,13 +36,31 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='assets/css/header-colors.css') }}" />
     
     <!-- Título dinámico -->
-    <title>{% block title %}Hotel System · Gestión de Reservaciones{% endblock %}</title>
+    <title>{% block title %}lemahotel · Gestión de Reservaciones{% endblock %}</title>
     
     <!-- Bloques para CSS extra por página -->
     {% block extra_css %}{% endblock %}
     
-    
-        /* Puedes agregar más estilos base aquí */
+    <style>
+        .card { border-radius: 15px; box-shadow: 0 5px 25px rgba(0,0,0,0.08); margin-bottom: 25px; border: none; overflow: hidden; }
+        .card-header { background-color: rgba(255,255,255,0.95); border-bottom: 1px solid rgba(0,0,0,0.05); padding: 20px 25px; }
+        .card-body { padding: 25px; }
+        .page-content { flex: 1; overflow-y: auto; padding: 20px; background-color: #f5f7fb; }
+        .wrapper { display: flex; width: 100%; min-height: 100vh; overflow: hidden; }
+        .page-wrapper { flex: 1; display: flex; flex-direction: column; }
+        .cal-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+        .cal-nav-btn { padding: 0.25rem 0.75rem; }
+        .cal-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.875rem; }
+        .cal-table th { background: #f8f9fa; padding: 8px 4px; text-align: center; font-weight: 600; border: 1px solid #dee2e6; width: 14.28%; }
+        .cal-table td { vertical-align: top; padding: 4px; border: 1px solid #dee2e6; min-height: 90px; height: 100px; }
+        .cal-table td.otro-mes { background: #f8f9fa; color: #adb5bd; }
+        .cal-table td.hoy { background: #e7f1ff; }
+        .cal-day-num { font-weight: 600; margin-bottom: 4px; font-size: 0.8rem; }
+        .cal-event { margin-bottom: 4px; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; background: #0d6efd; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        .cal-event a { color: inherit; text-decoration: none; }
+        .cal-event a:hover { text-decoration: underline; }
+        .cal-event.checkout { background: #6c757d; }
+        .cal-event.estado-cancelada { background: #dc3545; }
     </style>
 </head>
 
@@ -70,7 +88,158 @@
                     {% endwith %}
                     
                     <!-- Contenido principal de cada página -->
-                    {% block content %}{% endblock %}
+                    {% block content %}
+                    <!-- Dashboard: contenido por defecto cuando se renderiza dashboard.html -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h4 class="mb-0">Dashboard</h4>
+                            <p class="text-muted small mb-0">Resumen del día y disponibilidad de habitaciones</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <div class="flex-shrink-0 bg-primary bg-opacity-10 rounded-3 p-3">
+                                            <i class="bx bx-dollar-circle text-primary" style="font-size: 2rem;"></i>
+                                        </div>
+                                        <div class="ms-3">
+                                            <h6 class="text-muted mb-1">Ventas del día (USD)</h6>
+                                            <h4 class="mb-0" id="dashboard-ventas-usd">{{ (ventas_hoy_usd | float) | round(2) }}</h4>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <div class="flex-shrink-0 bg-success bg-opacity-10 rounded-3 p-3">
+                                            <i class="bx bx-wallet text-success" style="font-size: 2rem;"></i>
+                                        </div>
+                                        <div class="ms-3">
+                                            <h6 class="text-muted mb-1">Ventas del día (Bs)</h6>
+                                            <h4 class="mb-0" id="dashboard-ventas-bs">{{ (ventas_hoy_bs | float) | round(2) }}</h4>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card border-0 shadow-sm">
+                                <div class="card-header">
+                                    <div class="cal-header">
+                                        <h5 class="mb-0">Calendario de reservaciones</h5>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm cal-nav-btn" id="cal-prev" title="Mes anterior"><i class="bx bx-chevron-left"></i></button>
+                                            <span class="fw-semibold" id="cal-month-year" style="min-width: 180px; text-align: center;"></span>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm cal-nav-btn" id="cal-next" title="Mes siguiente"><i class="bx bx-chevron-right"></i></button>
+                                            <button type="button" class="btn btn-outline-primary btn-sm" id="cal-hoy" title="Ir a hoy">Hoy</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body overflow-auto">
+                                    <table class="cal-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="cal-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <script>
+                    (function() {
+                        var reservacionesData = {{ reservaciones_data | tojson }};
+                        var hoyStr = {{ hoy | tojson }};
+                        var urlBaseEditar = "{{ url_for('main.editar_reservacion', reservacion_id=0) }}".replace('/0/editar', '');
+                        var MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+                        function parseYMD(s) { var p = s.split('-'); return new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10)); }
+                        function toYMD(d) { var y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate(); return y + '-' + (m<10?'0':'') + m + '-' + (day<10?'0':'') + day; }
+                        function getReservacionesParaDia(dateStr) {
+                            var list = [];
+                            for (var i = 0; i < reservacionesData.length; i++) {
+                                var r = reservacionesData[i];
+                                if (dateStr < r.fecha_entrada || dateStr >= r.fecha_salida) continue;
+                                var d = parseYMD(dateStr);
+                                d.setDate(d.getDate() + 1);
+                                var esUltimoDia = toYMD(d) === r.fecha_salida;
+                                list.push({ id: r.id, texto: 'Hab ' + r.habitacion_numero + ' · ' + r.cliente_nombre, esUltimoDia: esUltimoDia, estado: r.estado });
+                            }
+                            return list;
+                        }
+
+                        var calMonth = parseYMD(hoyStr).getMonth();
+                        var calYear = parseYMD(hoyStr).getFullYear();
+
+                        function renderCalendario() {
+                            document.getElementById('cal-month-year').textContent = MESES[calMonth] + ' ' + calYear;
+                            var first = new Date(calYear, calMonth, 1);
+                            var last = new Date(calYear, calMonth + 1, 0);
+                            var start = new Date(first);
+                            var dow = start.getDay();
+                            dow = dow === 0 ? 6 : dow - 1;
+                            start.setDate(start.getDate() - dow);
+                            var tbody = document.getElementById('cal-body');
+                            tbody.innerHTML = '';
+                            for (var semana = 0; semana < 6; semana++) {
+                                var tr = document.createElement('tr');
+                                for (var d = 0; d < 7; d++) {
+                                    var td = document.createElement('td');
+                                    var dayStr = toYMD(start);
+                                    var esHoy = dayStr === hoyStr;
+                                    var esMesActual = start.getMonth() === calMonth;
+                                    if (!esMesActual) td.classList.add('otro-mes');
+                                    if (esHoy) td.classList.add('hoy');
+                                    var dayNum = document.createElement('div');
+                                    dayNum.className = 'cal-day-num';
+                                    dayNum.textContent = start.getDate();
+                                    td.appendChild(dayNum);
+                                    var eventos = getReservacionesParaDia(dayStr);
+                                    for (var e = 0; e < eventos.length; e++) {
+                                        var ev = eventos[e];
+                                        var span = document.createElement('div');
+                                        span.className = 'cal-event' + (ev.estado === 'cancelada' ? ' estado-cancelada' : (ev.esUltimoDia ? ' checkout' : ''));
+                                        var a = document.createElement('a');
+                                        a.href = urlBaseEditar + '/' + ev.id + '/editar';
+                                        a.title = ev.texto;
+                                        a.textContent = ev.texto;
+                                        span.appendChild(a);
+                                        td.appendChild(span);
+                                    }
+                                    tr.appendChild(td);
+                                    start.setDate(start.getDate() + 1);
+                                }
+                                tbody.appendChild(tr);
+                            }
+                        }
+
+                        document.getElementById('cal-prev').addEventListener('click', function() {
+                            calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+                            renderCalendario();
+                        });
+                        document.getElementById('cal-next').addEventListener('click', function() {
+                            calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+                            renderCalendario();
+                        });
+                        document.getElementById('cal-hoy').addEventListener('click', function() {
+                            var h = parseYMD(hoyStr);
+                            calMonth = h.getMonth();
+                            calYear = h.getFullYear();
+                            renderCalendario();
+                        });
+                        renderCalendario();
+                    })();
+                    </script>
+                    {% endblock %}
                     
                 </div>
                 <!-- End Container -->

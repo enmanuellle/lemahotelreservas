@@ -1,8 +1,12 @@
 $(function () {
 	"use strict";
-	/* perfect scrol bar */
-	new PerfectScrollbar('.header-message-list');
-	new PerfectScrollbar('.header-notifications-list');
+	/* perfect scroll bar (solo si la librería está cargada y los elementos existen) */
+	if (typeof PerfectScrollbar === 'function') {
+		var elMsg = document.querySelector('.header-message-list');
+		var elNotif = document.querySelector('.header-notifications-list');
+		if (elMsg) new PerfectScrollbar(elMsg);
+		if (elNotif) new PerfectScrollbar(elNotif);
+	}
 	// search bar
 	$(".mobile-search-icon").on("click", function () {
 		$(".search-bar").addClass("full-search-bar");

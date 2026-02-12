@@ -1,0 +1,56 @@
+{% extends 'dashboard.html' %}
+
+{% block title %}Mi Perfil · lemahotel{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-3 d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Mi Perfil</h4>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="bx bx-arrow-back"></i> Volver
+        </a>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Datos personales</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" name="nombre" class="form-control" required
+                                   value="{{ current_user.nombre }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Apellido</label>
+                            <input type="text" name="apellido" class="form-control" required
+                                   value="{{ current_user.apellido }}">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nombre de usuario (login)</label>
+                            <input type="text" name="usuario" class="form-control" required
+                                   value="{{ current_user.usuario }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" required
+                                   value="{{ current_user.email }}">
+                        </div>
+                    </div>
+                    <p class="text-muted small">Para cambiar su contraseña use la opción <strong>Cambiar contraseña</strong> en el menú.</p>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bx bx-save"></i> Guardar cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

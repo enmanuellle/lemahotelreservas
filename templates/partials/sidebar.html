@@ -2,7 +2,7 @@
 <div class="sidebar-wrapper" id="sidebar-wrapper" data-simplebar="true">
     <div class="sidebar-header">
         <div>
-            <h4 class="logo-text">Hotel System</h4>
+            <h4 class="logo-text">lemahotel</h4>
         </div>
         <div class="toggle-icon ms-auto"><i class='bx bx-first-page'></i></div>
     </div>
@@ -133,12 +133,12 @@
             </a>
             <ul>
                 <li>
-                    <a href="">
+                    <a href="{{ url_for('main.crear_usuario') }}">
                         <i class="bx bx-plus"></i> Crear Usuario
                     </a>
                 </li>
                 <li>
-                    <a href="">
+                    <a href="{{ url_for('main.lista_usuarios') }}">
                         <i class="bx bx-list-ul"></i> Gestionar Usuarios
                     </a>
                 </li>
@@ -146,7 +146,7 @@
         </li>
         {% endif %}
 
-        <!-- Configuración y Perfil -->
+        <!-- Configuración -->
         <li>
             <a href="javascript:;" class="has-arrow">
                 <div class="parent-icon"><i class='bx bx-cog'></i></div>
@@ -154,12 +154,12 @@
             </a>
             <ul>
                 <li>
-                    <a href="">
+                    <a href="{{ url_for('main.mi_perfil') }}">
                         <i class="bx bx-user"></i> Mi Perfil
                     </a>
                 </li>
                 <li>
-                    <a href="">
+                    <a href="{{ url_for('main.cambiar_mi_contrasena') }}">
                         <i class="bx bx-lock"></i> Cambiar Contraseña
                     </a>
                 </li>
@@ -197,25 +197,7 @@
                 <div class="top-menu ms-auto">
                     <ul class="navbar-nav align-items-center">
                         <!-- Notificaciones (opcional, puedes agregar datos dinámicos después) -->
-                        <li class="nav-item dropdown dropdown-large">
-                            <a class="nav-link dropdown-toggle dropdown-toggle-nocaret position-relative" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span class="alert-count">0</span><i class='bx bx-bell'></i>
-                            </a>
-                            <div class="dropdown-menu dropdown-menu-end">
-                                <a href="javascript:;">
-                                    <div class="msg-header">
-                                        <p class="msg-header-title">Notificaciones</p>
-                                        <p class="msg-header-clear ms-auto">Marcar como leídas</p>
-                                    </div>
-                                </a>
-                                <div class="header-notifications-list">
-                                    <p class="text-center py-3">No hay notificaciones nuevas</p>
-                                </div>
-                                <a href="javascript:;">
-                                    <div class="text-center msg-footer">Ver Todas</div>
-                                </a>
-                            </div>
-                        </li>
+
 
                         <!-- Usuario -->
                         <li class="nav-item dropdown dropdown-large">
@@ -227,8 +209,8 @@
                                 </div>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="#"><i class="bx bx-user"></i><span>Perfil</span></a></li>
-                                <li><a class="dropdown-item" href="#"><i class="bx bx-cog"></i><span>Configuración</span></a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('main.mi_perfil') }}"><i class="bx bx-user"></i><span>Mi Perfil</span></a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('main.cambiar_mi_contrasena') }}"><i class="bx bx-lock"></i><span>Cambiar Contraseña</span></a></li>
                                 <li><div class="dropdown-divider mb-0"></div></li>
                                 <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bx bx-log-out-circle"></i><span>Cerrar Sesión</span></a></li>
                             </ul>

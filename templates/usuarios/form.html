@@ -1,0 +1,89 @@
+{% extends 'dashboard.html' %}
+
+{% block title %}{{ 'Editar' if usuario else 'Nuevo' }} Usuario · lemahotel{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-3 d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">{{ 'Editar' if usuario else 'Nuevo' }} Usuario</h4>
+        <a href="{{ url_for('main.lista_usuarios') }}" class="btn btn-outline-secondary">
+            <i class="bx bx-arrow-back"></i> Volver
+        </a>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Datos del Usuario</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" name="nombre" class="form-control" required
+                                   value="{{ usuario.nombre if usuario else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Apellido</label>
+                            <input type="text" name="apellido" class="form-control" required
+                                   value="{{ usuario.apellido if usuario else '' }}">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Nombre de usuario (login)</label>
+                            <input type="text" name="usuario" class="form-control" required
+                                   value="{{ usuario.usuario if usuario else '' }}"
+                                   {% if usuario and usuario.id == current_user.id %}readonly{% endif %}>
+                            {% if usuario and usuario.id == current_user.id %}
+                            <p class="text-muted small mb-0 mt-1">No puede cambiar su propio nombre de usuario aquí.</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" required
+                                   value="{{ usuario.email if usuario else '' }}">
+                        </div>
+                    </div>
+                    {% if not usuario %}
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña</label>
+                        <input type="password" name="contrasena" class="form-control" required minlength="6"
+                               placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">Nueva contraseña (opcional)</label>
+                        <input type="password" name="nueva_contrasena" class="form-control" minlength="6"
+                               placeholder="Dejar en blanco para no cambiar" autocomplete="new-password">
+                    </div>
+                    {% endif %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Rol</label>
+                            <select name="rol" class="form-select">
+                                <option value="admin" {% if usuario and usuario.rol == 'admin' %}selected{% endif %}>Admin</option>
+                                <option value="gerente" {% if usuario and usuario.rol == 'gerente' %}selected{% endif %}>Gerente</option>
+                                <option value="recepcionista" {% if not usuario or usuario.rol == 'recepcionista' %}selected{% endif %}>Recepcionista</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                            <div class="form-check form-switch">
+                                <input type="checkbox" name="activo" class="form-check-input" id="activo" value="1"
+                                       {% if not usuario or usuario.activo %}checked{% endif %}>
+                                <label class="form-check-label" for="activo">Usuario activo</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bx bx-save"></i> Guardar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

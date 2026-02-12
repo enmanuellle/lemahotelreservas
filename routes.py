@@ -1,7 +1,9 @@
+from functools import wraps
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from decimal import Decimal
+from datetime import date
 from models import (
     db,
     Usuario,
@@ -21,6 +23,16 @@ auth = Blueprint('auth', __name__)
 main = Blueprint('main', __name__)
 api = Blueprint('api', __name__, url_prefix='/api')
 
+# Métodos de pago válidos en todo el sistema (valor, etiqueta)
+METODOS_PAGO = [
+    ('efectivo_usd', 'Efectivo USD'),
+    ('efectivo_bs', 'Efectivo Bs'),
+    ('pago_movil', 'Pago móvil'),
+    ('zelle', 'Zelle'),
+    ('binance', 'Binance'),
+    ('punto_venta', 'Punto de venta'),
+]
+
 
 def _obtener_tasa_actual():
     """Devuelve la tasa de cambio activa más reciente."""
@@ -36,6 +48,42 @@ def _to_decimal(value):
         return Decimal(str(value))
     except Exception:
         return Decimal("0")
+
+
+def _parse_fecha(value):
+    """Convierte string (YYYY-MM-DD) o date a date. Devuelve None si no es válido."""
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _habitacion_disponible(habitacion_id, fecha_entrada, fecha_salida, excluir_reservacion_id=None):
+    """
+    Indica si la habitación está disponible en el rango [fecha_entrada, fecha_salida].
+    No se consideran las reservaciones canceladas.
+    excluir_reservacion_id: ID de reservación a excluir (para edición).
+    """
+    fe = _parse_fecha(fecha_entrada)
+    fs = _parse_fecha(fecha_salida)
+    if fe is None or fs is None or fe >= fs:
+        return False
+    q = (
+        Reservacion.query.filter(
+            Reservacion.habitacion_id == habitacion_id,
+            Reservacion.estado != 'cancelada',
+            Reservacion.fecha_entrada < fs,
+            Reservacion.fecha_salida > fe,
+        )
+    )
+    if excluir_reservacion_id is not None:
+        q = q.filter(Reservacion.id != excluir_reservacion_id)
+    return q.first() is None
+
 
 # ---------- Autenticación ----------
 @auth.route('/login', methods=['GET', 'POST'])
@@ -79,9 +127,38 @@ def logout():
 @main.route('/dashboard')
 @login_required
 def dashboard():
-    """Página principal después del login, accesible para todos los roles"""
-    # Puedes pasar información básica del usuario al template
-    return render_template('dashboard.html', usuario=current_user)
+    """Página principal: ventas del día y disponibilidad de habitaciones."""
+    hoy = date.today()
+    ventas_hoy = (
+        Venta.query.filter(db.func.date(Venta.fecha_venta) == hoy, Venta.estado != 'anulado').all()
+    )
+    total_usd = sum(_to_decimal(v.total_usd) for v in ventas_hoy)
+    total_bs = sum(_to_decimal(v.total_bs) for v in ventas_hoy)
+
+    reservaciones_activas = (
+        Reservacion.query.filter(Reservacion.estado != 'cancelada')
+        .order_by(Reservacion.fecha_entrada).all()
+    )
+    reservaciones_data = [
+        {
+            'id': r.id,
+            'habitacion_numero': r.habitacion.numero if r.habitacion else '-',
+            'cliente_nombre': f'{r.cliente.nombre} {r.cliente.apellido}' if r.cliente else '-',
+            'fecha_entrada': r.fecha_entrada.isoformat(),
+            'fecha_salida': r.fecha_salida.isoformat(),
+            'estado': r.estado,
+        }
+        for r in reservaciones_activas
+    ]
+
+    return render_template(
+        'dashboard.html',
+        usuario=current_user,
+        ventas_hoy_usd=total_usd,
+        ventas_hoy_bs=total_bs,
+        reservaciones_data=reservaciones_data,
+        hoy=hoy.isoformat(),
+    )
 
 # ---------- User loader para Flask-Login ----------
 def load_user(user_id):
@@ -617,7 +694,17 @@ def api_crear_cliente():
         db.session.rollback()
         return jsonify({'error': 'No se pudo crear el cliente', 'detalle': str(e)}), 500
 
-    return jsonify(_cliente_to_dict(cliente)), 201
+    # Respuesta con datos del request + id asignado (evita errores de serialización tras commit)
+    respuesta = {
+        'id': cliente.id,
+        'nombre': data['nombre'],
+        'apellido': data['apellido'],
+        'email': data.get('email'),
+        'telefono': data.get('telefono'),
+        'direccion': data.get('direccion'),
+        'documento_identidad': data['documento_identidad'],
+    }
+    return jsonify(respuesta), 201
 
 
 # ---------- API: Reservaciones ----------
@@ -670,6 +757,18 @@ def api_crear_reservacion():
     tasa_actual = _obtener_tasa_actual()
     if not tasa_actual:
         return jsonify({'error': 'No hay tasa de cambio activa para calcular precios en Bs'}), 400
+
+    fecha_entrada = data.get('fecha_entrada')
+    fecha_salida = data.get('fecha_salida')
+    fe = _parse_fecha(fecha_entrada)
+    fs = _parse_fecha(fecha_salida)
+    if fe is None or fs is None:
+        return jsonify({'error': 'Fechas de entrada y salida deben ser válidas (formato AAAA-MM-DD)'}), 400
+    if fe >= fs:
+        return jsonify({'error': 'La fecha de salida debe ser posterior a la fecha de entrada'}), 400
+
+    if not _habitacion_disponible(data['habitacion_id'], fecha_entrada, fecha_salida):
+        return jsonify({'error': 'La habitación no está disponible en las fechas seleccionadas'}), 409
 
     try:
         precio_por_noche_usd = _to_decimal(data.get('precio_por_noche_usd'))
@@ -750,28 +849,28 @@ def api_detalle_venta(venta_id):
     return jsonify(_venta_to_dict(venta))
 
 
+def _metodo_pago_valido(valor):
+    """Devuelve True si valor es un método de pago válido o está vacío."""
+    if not valor:
+        return True
+    return valor in [v[0] for v in METODOS_PAGO]
+
+
 @api.route('/ventas', methods=['POST'])
 def api_crear_venta():
     """
     Crea una venta (compra) con sus detalles.
+    metodo_pago debe ser uno de: efectivo_usd, efectivo_bs, pago_movil, zelle, binance, punto_venta.
     JSON esperado, por ejemplo:
     {
       "cliente_id": 1,
       "usuario_id": 1,
       "tipo": "restaurante",
       "reservacion_id": null,
-      "metodo_pago": "tarjeta",
+      "metodo_pago": "efectivo_usd",
       "estado": "pagado",
       "observaciones": "Opcional",
-      "items": [
-        {
-          "producto_restaurante_id": 1,
-          "plan_turistico_id": null,
-          "cantidad": 2,
-          "precio_unitario_usd": 10.0,
-          "descripcion": "Detalle opcional"
-        }
-      ]
+      "items": [...]
     }
     """
     data = request.get_json(silent=True) or {}
@@ -780,6 +879,11 @@ def api_crear_venta():
     faltantes = [c for c in requeridos if c not in data]
     if faltantes:
         return jsonify({'error': f'Faltan campos requeridos: {", ".join(faltantes)}'}), 400
+
+    metodo = data.get('metodo_pago')
+    if metodo and not _metodo_pago_valido(metodo):
+        validos = ', '.join(v[0] for v in METODOS_PAGO)
+        return jsonify({'error': f'metodo_pago no válido. Use uno de: {validos}'}), 400
 
     items = data.get('items') or []
     if not isinstance(items, list) or not items:
@@ -827,7 +931,7 @@ def api_crear_venta():
             impuesto_bs=impuesto_usd * tasa_valor,
             total_usd=total_usd,
             total_bs=total_usd * tasa_valor,
-            metodo_pago=data.get('metodo_pago'),
+            metodo_pago=data.get('metodo_pago') or None,
             estado=data.get('estado', 'pagado'),
             observaciones=data.get('observaciones'),
         )
@@ -878,6 +982,19 @@ def crear_reservacion():
             flash('No hay una tasa de cambio activa. Registre una antes de continuar.', 'danger')
             return redirect(url_for('main.lista_tasas'))
 
+        fe = _parse_fecha(fecha_entrada)
+        fs = _parse_fecha(fecha_salida)
+        if fe is None or fs is None:
+            flash('Fechas de entrada y salida deben ser válidas (formato AAAA-MM-DD).', 'danger')
+            return redirect(url_for('main.crear_reservacion'))
+        if fe >= fs:
+            flash('La fecha de salida debe ser posterior a la fecha de entrada.', 'danger')
+            return redirect(url_for('main.crear_reservacion'))
+
+        if not _habitacion_disponible(habitacion_id, fecha_entrada, fecha_salida):
+            flash('La habitación no está disponible en las fechas seleccionadas. Elija otra habitación o otras fechas.', 'danger')
+            return redirect(url_for('main.crear_reservacion'))
+
         habitacion = Habitacion.query.get_or_404(habitacion_id)
         if not habitacion.tipo:
             flash('La habitación seleccionada no tiene un tipo asociado con precio definido.', 'danger')
@@ -902,11 +1019,19 @@ def crear_reservacion():
         flash('Reservación creada correctamente.', 'success')
         return redirect(url_for('main.lista_reservaciones'))
 
+    habitaciones_precios = {
+        str(h.id): {
+            'precio_usd': float(h.tipo.precio_por_noche_usd) if h.tipo and h.tipo.precio_por_noche_usd is not None else 0,
+            'precio_bs': float(h.tipo.precio_por_noche_bs) if h.tipo and h.tipo.precio_por_noche_bs is not None else 0,
+        }
+        for h in habitaciones
+    }
     return render_template(
         'reservaciones/form.html',
         clientes=clientes,
         habitaciones=habitaciones,
         tasa_actual=tasa_actual,
+        habitaciones_precios=habitaciones_precios,
     )
 
 
@@ -919,15 +1044,36 @@ def editar_reservacion(reservacion_id):
     tasa_actual = _obtener_tasa_actual()
 
     if request.method == 'POST':
-        reservacion.cliente_id = request.form.get('cliente_id')
-        reservacion.habitacion_id = request.form.get('habitacion_id')
-        reservacion.fecha_entrada = request.form.get('fecha_entrada')
-        reservacion.fecha_salida = request.form.get('fecha_salida')
-        reservacion.estado = request.form.get('estado', 'confirmada')
-        reservacion.observaciones = request.form.get('observaciones')
+        cliente_id = request.form.get('cliente_id')
+        habitacion_id = request.form.get('habitacion_id')
+        fecha_entrada = request.form.get('fecha_entrada')
+        fecha_salida = request.form.get('fecha_salida')
+        estado = request.form.get('estado', 'confirmada')
+        observaciones = request.form.get('observaciones')
+
         if not tasa_actual:
             flash('No hay una tasa de cambio activa. Registre una antes de continuar.', 'danger')
-            return redirect(url_for('main.lista_tasas'))
+            return redirect(url_for('main.editar_reservacion', reservacion_id=reservacion.id))
+
+        fe = _parse_fecha(fecha_entrada)
+        fs = _parse_fecha(fecha_salida)
+        if fe is None or fs is None:
+            flash('Fechas de entrada y salida deben ser válidas (formato AAAA-MM-DD).', 'danger')
+            return redirect(url_for('main.editar_reservacion', reservacion_id=reservacion.id))
+        if fe >= fs:
+            flash('La fecha de salida debe ser posterior a la fecha de entrada.', 'danger')
+            return redirect(url_for('main.editar_reservacion', reservacion_id=reservacion.id))
+
+        if not _habitacion_disponible(habitacion_id, fecha_entrada, fecha_salida, excluir_reservacion_id=reservacion.id):
+            flash('La habitación no está disponible en las fechas seleccionadas. Elija otra habitación o otras fechas.', 'danger')
+            return redirect(url_for('main.editar_reservacion', reservacion_id=reservacion.id))
+
+        reservacion.cliente_id = cliente_id
+        reservacion.habitacion_id = habitacion_id
+        reservacion.fecha_entrada = fecha_entrada
+        reservacion.fecha_salida = fecha_salida
+        reservacion.estado = estado
+        reservacion.observaciones = observaciones
 
         habitacion = Habitacion.query.get_or_404(reservacion.habitacion_id)
         if not habitacion.tipo:
@@ -941,12 +1087,20 @@ def editar_reservacion(reservacion_id):
         flash('Reservación actualizada correctamente.', 'success')
         return redirect(url_for('main.lista_reservaciones'))
 
+    habitaciones_precios = {
+        str(h.id): {
+            'precio_usd': float(h.tipo.precio_por_noche_usd) if h.tipo and h.tipo.precio_por_noche_usd is not None else 0,
+            'precio_bs': float(h.tipo.precio_por_noche_bs) if h.tipo and h.tipo.precio_por_noche_bs is not None else 0,
+        }
+        for h in habitaciones
+    }
     return render_template(
         'reservaciones/form.html',
         reservacion=reservacion,
         clientes=clientes,
         habitaciones=habitaciones,
         tasa_actual=tasa_actual,
+        habitaciones_precios=habitaciones_precios,
     )
 
 
@@ -965,48 +1119,118 @@ def eliminar_reservacion(reservacion_id):
 @login_required
 def lista_ventas():
     ventas = Venta.query.all()
-    clientes = Cliente.query.all()
-    usuarios = Usuario.query.all()
-    return render_template(
-        'ventas/lista.html',
-        ventas=ventas,
-        clientes=clientes,
-        usuarios=usuarios,
-    )
+    metodos_pago_dict = dict(METODOS_PAGO)
+    return render_template('ventas/lista.html', ventas=ventas, metodos_pago_dict=metodos_pago_dict)
+
+
+def _procesar_items_venta(request, tasa_valor):
+    """Extrae ítems del form (item_tipo, item_id, item_cantidad) y devuelve (detalles, subtotal_usd, tipo_venta)."""
+    tipos = request.form.getlist('item_tipo')
+    ids = request.form.getlist('item_id')
+    cantidades = request.form.getlist('item_cantidad')
+    detalles = []
+    subtotal_usd = Decimal('0')
+    tiene_plan = False
+    tiene_producto = False
+    for i in range(len(tipos)):
+        tipo = (tipos[i] or '').strip().lower()
+        try:
+            item_id = int(ids[i]) if i < len(ids) else 0
+            cantidad = int(cantidades[i]) if i < len(cantidades) else 1
+        except (ValueError, TypeError):
+            continue
+        if cantidad < 1:
+            continue
+        precio_usd = None
+        descripcion = None
+        producto_restaurante_id = None
+        plan_turistico_id = None
+        if tipo == 'plan':
+            plan = PlanTuristico.query.get(item_id)
+            if plan and plan.activo:
+                precio_usd = _to_decimal(plan.precio_usd)
+                descripcion = plan.nombre
+                plan_turistico_id = plan.id
+                tiene_plan = True
+        elif tipo == 'producto':
+            prod = ProductoRestaurante.query.get(item_id)
+            if prod and prod.activo:
+                precio_usd = _to_decimal(prod.precio_unitario_usd)
+                descripcion = prod.nombre
+                producto_restaurante_id = prod.id
+                tiene_producto = True
+        if precio_usd is None:
+            continue
+        total_usd = precio_usd * cantidad
+        subtotal_usd += total_usd
+        precio_bs = precio_usd * tasa_valor
+        total_bs = total_usd * tasa_valor
+        detalle = VentaDetalle(
+            producto_restaurante_id=producto_restaurante_id,
+            plan_turistico_id=plan_turistico_id,
+            cantidad=cantidad,
+            precio_unitario_usd=precio_usd,
+            precio_unitario_bs=precio_bs,
+            total_usd=total_usd,
+            total_bs=total_bs,
+            descripcion=descripcion,
+        )
+        detalles.append(detalle)
+    if tiene_plan and tiene_producto:
+        tipo_venta = 'mixta'
+    elif tiene_plan:
+        tipo_venta = 'plan_turistico'
+    elif tiene_producto:
+        tipo_venta = 'restaurante'
+    else:
+        tipo_venta = 'restaurante'
+    return detalles, subtotal_usd, tipo_venta
 
 
 @main.route('/ventas/nueva', methods=['GET', 'POST'])
 @login_required
 def crear_venta():
     clientes = Cliente.query.all()
-    usuarios = Usuario.query.all()
+    planes = PlanTuristico.query.filter_by(activo=True).order_by(PlanTuristico.nombre).all()
+    productos = ProductoRestaurante.query.filter_by(activo=True).order_by(ProductoRestaurante.nombre).all()
     tasa_actual = _obtener_tasa_actual()
 
     if request.method == 'POST':
         cliente_id = request.form.get('cliente_id')
-        usuario_id = request.form.get('usuario_id')
-        tipo = request.form.get('tipo')
         reservacion_id = request.form.get('reservacion_id') or None
         if not tasa_actual:
             flash('No hay una tasa de cambio activa. Registre una antes de continuar.', 'danger')
             return redirect(url_for('main.lista_tasas'))
 
-        subtotal_usd = _to_decimal(request.form.get('subtotal_usd') or 0)
-        impuesto_usd = _to_decimal(request.form.get('impuesto_usd') or 0)
-        total_usd = _to_decimal(request.form.get('total_usd') or 0)
-
         tasa_valor = _to_decimal(tasa_actual.tasa_bs_por_usd)
+        detalles, subtotal_usd, tipo_venta = _procesar_items_venta(request, tasa_valor)
+        if not detalles:
+            flash('Debe agregar al menos un ítem (plan turístico o producto).', 'danger')
+            return render_template(
+                'ventas/form.html',
+                clientes=clientes,
+                planes=planes,
+                productos=productos,
+                tasa_actual=tasa_actual,
+                detalles_edicion=[],
+                metodos_pago=METODOS_PAGO,
+            )
+
+        impuesto_usd = _to_decimal(request.form.get('impuesto_usd') or 0)
+        total_usd = subtotal_usd + impuesto_usd
         subtotal_bs = subtotal_usd * tasa_valor
         impuesto_bs = impuesto_usd * tasa_valor
         total_bs = total_usd * tasa_valor
         metodo_pago = request.form.get('metodo_pago')
+        if metodo_pago and not _metodo_pago_valido(metodo_pago):
+            metodo_pago = None
         estado = request.form.get('estado', 'pagado')
         observaciones = request.form.get('observaciones')
 
         nueva = Venta(
             cliente_id=cliente_id,
-            usuario_id=usuario_id,
-            tipo=tipo,
+            usuario_id=current_user.id,
+            tipo=tipo_venta,
             reservacion_id=reservacion_id,
             subtotal_usd=subtotal_usd,
             subtotal_bs=subtotal_bs,
@@ -1019,6 +1243,8 @@ def crear_venta():
             observaciones=observaciones,
         )
         db.session.add(nueva)
+        for d in detalles:
+            nueva.detalles.append(d)
         db.session.commit()
         flash('Venta creada correctamente.', 'success')
         return redirect(url_for('main.lista_ventas'))
@@ -1026,8 +1252,11 @@ def crear_venta():
     return render_template(
         'ventas/form.html',
         clientes=clientes,
-        usuarios=usuarios,
+        planes=planes,
+        productos=productos,
         tasa_actual=tasa_actual,
+        detalles_edicion=[],
+        metodos_pago=METODOS_PAGO,
     )
 
 
@@ -1036,40 +1265,78 @@ def crear_venta():
 def editar_venta(venta_id):
     venta = Venta.query.get_or_404(venta_id)
     clientes = Cliente.query.all()
-    usuarios = Usuario.query.all()
+    planes = PlanTuristico.query.filter_by(activo=True).order_by(PlanTuristico.nombre).all()
+    productos = ProductoRestaurante.query.filter_by(activo=True).order_by(ProductoRestaurante.nombre).all()
     tasa_actual = _obtener_tasa_actual()
 
     if request.method == 'POST':
         venta.cliente_id = request.form.get('cliente_id')
-        venta.usuario_id = request.form.get('usuario_id')
-        venta.tipo = request.form.get('tipo')
+        venta.usuario_id = current_user.id
         venta.reservacion_id = request.form.get('reservacion_id') or None
         if not tasa_actual:
             flash('No hay una tasa de cambio activa. Registre una antes de continuar.', 'danger')
             return redirect(url_for('main.lista_tasas'))
 
-        venta.subtotal_usd = _to_decimal(request.form.get('subtotal_usd') or 0)
-        venta.impuesto_usd = _to_decimal(request.form.get('impuesto_usd') or 0)
-        venta.total_usd = _to_decimal(request.form.get('total_usd') or 0)
-
         tasa_valor = _to_decimal(tasa_actual.tasa_bs_por_usd)
+        detalles, subtotal_usd, tipo_venta = _procesar_items_venta(request, tasa_valor)
+        if not detalles:
+            flash('Debe agregar al menos un ítem (plan turístico o producto).', 'danger')
+            return render_template(
+                'ventas/form.html',
+                venta=venta,
+                clientes=clientes,
+                planes=planes,
+                productos=productos,
+                tasa_actual=tasa_actual,
+                detalles_edicion=[],
+                metodos_pago=METODOS_PAGO,
+            )
+
+        venta.tipo = tipo_venta
+        venta.subtotal_usd = subtotal_usd
+        venta.impuesto_usd = _to_decimal(request.form.get('impuesto_usd') or 0)
+        venta.total_usd = venta.subtotal_usd + venta.impuesto_usd
         venta.subtotal_bs = venta.subtotal_usd * tasa_valor
         venta.impuesto_bs = venta.impuesto_usd * tasa_valor
         venta.total_bs = venta.total_usd * tasa_valor
-        venta.metodo_pago = request.form.get('metodo_pago')
+        mp = request.form.get('metodo_pago')
+        venta.metodo_pago = mp if _metodo_pago_valido(mp) else venta.metodo_pago
         venta.estado = request.form.get('estado', 'pagado')
         venta.observaciones = request.form.get('observaciones')
 
+        for d in list(venta.detalles):
+            db.session.delete(d)
+        for d in detalles:
+            d.venta_id = venta.id
+            venta.detalles.append(d)
         db.session.commit()
         flash('Venta actualizada correctamente.', 'success')
         return redirect(url_for('main.lista_ventas'))
+
+    detalles_edicion = []
+    if venta.detalles:
+        for d in venta.detalles:
+            nombre = d.descripcion or (d.plan_turistico.nombre if d.plan_turistico else (d.producto_restaurante.nombre if d.producto_restaurante else ''))
+            detalles_edicion.append({
+                'tipo': 'plan' if d.plan_turistico_id else 'producto',
+                'id': d.plan_turistico_id or d.producto_restaurante_id,
+                'nombre': nombre,
+                'cantidad': d.cantidad,
+                'precioUsd': float(d.precio_unitario_usd),
+                'precioBs': float(d.precio_unitario_bs),
+                'totalUsd': float(d.total_usd),
+                'totalBs': float(d.total_bs),
+            })
 
     return render_template(
         'ventas/form.html',
         venta=venta,
         clientes=clientes,
-        usuarios=usuarios,
+        planes=planes,
+        productos=productos,
         tasa_actual=tasa_actual,
+        detalles_edicion=detalles_edicion,
+        metodos_pago=METODOS_PAGO,
     )
 
 
@@ -1198,3 +1465,199 @@ def eliminar_venta_detalle(detalle_id):
     db.session.commit()
     flash('Detalle de venta eliminado correctamente.', 'success')
     return redirect(url_for('main.lista_ventas_detalle'))
+
+
+def admin_required(f):
+    """Decorator: solo usuarios con rol admin."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.rol != 'admin':
+            flash('No tiene permiso para acceder a esta sección.', 'danger')
+            return redirect(url_for('main.dashboard'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ---------- CRUD Usuarios (solo admin) ----------
+@main.route('/usuarios')
+@login_required
+@admin_required
+def lista_usuarios():
+    usuarios = Usuario.query.order_by(Usuario.nombre, Usuario.apellido).all()
+    return render_template('usuarios/lista.html', usuarios=usuarios)
+
+
+@main.route('/usuarios/nuevo', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def crear_usuario():
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip()
+        apellido = request.form.get('apellido', '').strip()
+        email = request.form.get('email', '').strip()
+        usuario = request.form.get('usuario', '').strip()
+        contrasena = request.form.get('contrasena', '')
+        rol = request.form.get('rol', 'recepcionista')
+        activo = request.form.get('activo') == 'on' or request.form.get('activo') == '1'
+
+        if not nombre or not apellido or not email or not usuario or not contrasena:
+            flash('Nombre, apellido, email, usuario y contraseña son obligatorios.', 'danger')
+            return render_template('usuarios/form.html')
+
+        if Usuario.query.filter_by(usuario=usuario).first():
+            flash(f'Ya existe un usuario con el nombre de usuario "{usuario}".', 'danger')
+            return render_template('usuarios/form.html')
+
+        if Usuario.query.filter_by(email=email).first():
+            flash(f'Ya existe un usuario con el email "{email}".', 'danger')
+            return render_template('usuarios/form.html')
+
+        if len(contrasena) < 6:
+            flash('La contraseña debe tener al menos 6 caracteres.', 'danger')
+            return render_template('usuarios/form.html')
+
+        nuevo = Usuario(
+            nombre=nombre,
+            apellido=apellido,
+            email=email,
+            usuario=usuario,
+            contrasena=generate_password_hash(contrasena),
+            rol=rol,
+            activo=activo,
+        )
+        db.session.add(nuevo)
+        db.session.commit()
+        flash('Usuario creado correctamente.', 'success')
+        return redirect(url_for('main.lista_usuarios'))
+
+    return render_template('usuarios/form.html')
+
+
+@main.route('/usuarios/<int:usuario_id>/editar', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def editar_usuario(usuario_id):
+    u = Usuario.query.get_or_404(usuario_id)
+    if request.method == 'POST':
+        u.nombre = request.form.get('nombre', '').strip()
+        u.apellido = request.form.get('apellido', '').strip()
+        u.rol = request.form.get('rol', 'recepcionista')
+        u.activo = request.form.get('activo') == 'on' or request.form.get('activo') == '1'
+
+        nuevo_usuario = request.form.get('usuario', '').strip()
+        if not nuevo_usuario:
+            flash('El nombre de usuario es obligatorio.', 'danger')
+            return render_template('usuarios/form.html', usuario=u)
+        if Usuario.query.filter(Usuario.usuario == nuevo_usuario, Usuario.id != u.id).first():
+            flash(f'Ya existe un usuario con el nombre "{nuevo_usuario}".', 'danger')
+            return render_template('usuarios/form.html', usuario=u)
+        u.usuario = nuevo_usuario
+
+        nuevo_email = request.form.get('email', '').strip()
+        if not nuevo_email:
+            flash('El email es obligatorio.', 'danger')
+            return render_template('usuarios/form.html', usuario=u)
+        if Usuario.query.filter(Usuario.email == nuevo_email, Usuario.id != u.id).first():
+            flash(f'Ya existe un usuario con el email "{nuevo_email}".', 'danger')
+            return render_template('usuarios/form.html', usuario=u)
+        u.email = nuevo_email
+
+        nueva_contrasena = request.form.get('nueva_contrasena', '').strip()
+        if nueva_contrasena:
+            if len(nueva_contrasena) < 6:
+                flash('La contraseña debe tener al menos 6 caracteres.', 'danger')
+                return render_template('usuarios/form.html', usuario=u)
+            u.contrasena = generate_password_hash(nueva_contrasena)
+
+        db.session.commit()
+        flash('Usuario actualizado correctamente.', 'success')
+        return redirect(url_for('main.lista_usuarios'))
+
+    return render_template('usuarios/form.html', usuario=u)
+
+
+@main.route('/usuarios/<int:usuario_id>/eliminar', methods=['POST'])
+@login_required
+@admin_required
+def eliminar_usuario(usuario_id):
+    u = Usuario.query.get_or_404(usuario_id)
+    if u.id == current_user.id:
+        flash('No puede eliminar su propio usuario.', 'danger')
+        return redirect(url_for('main.lista_usuarios'))
+    db.session.delete(u)
+    db.session.commit()
+    flash('Usuario eliminado correctamente.', 'success')
+    return redirect(url_for('main.lista_usuarios'))
+
+
+@main.route('/usuarios/<int:usuario_id>/cambiar-contrasena', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def cambiar_contrasena_usuario(usuario_id):
+    u = Usuario.query.get_or_404(usuario_id)
+    if request.method == 'POST':
+        nueva = request.form.get('nueva_contrasena', '').strip()
+        confirmar = request.form.get('confirmar_contrasena', '').strip()
+        if not nueva or not confirmar:
+            flash('Debe completar ambos campos de contraseña.', 'danger')
+            return render_template('config/cambiar_contrasena.html', usuario=u, es_admin=True)
+        if nueva != confirmar:
+            flash('Las contraseñas no coinciden.', 'danger')
+            return render_template('config/cambiar_contrasena.html', usuario=u, es_admin=True)
+        if len(nueva) < 6:
+            flash('La contraseña debe tener al menos 6 caracteres.', 'danger')
+            return render_template('config/cambiar_contrasena.html', usuario=u, es_admin=True)
+        u.contrasena = generate_password_hash(nueva)
+        db.session.commit()
+        flash('Contraseña actualizada correctamente.', 'success')
+        return redirect(url_for('main.lista_usuarios'))
+    return render_template('config/cambiar_contrasena.html', usuario=u, es_admin=True)
+
+
+# ---------- Configuración (perfil y contraseña del usuario actual) ----------
+@main.route('/config/perfil', methods=['GET', 'POST'])
+@login_required
+def mi_perfil():
+    if request.method == 'POST':
+        current_user.nombre = request.form.get('nombre', '').strip()
+        current_user.apellido = request.form.get('apellido', '').strip()
+        email = request.form.get('email', '').strip()
+        usuario = request.form.get('usuario', '').strip()
+        if Usuario.query.filter(Usuario.email == email, Usuario.id != current_user.id).first():
+            flash('Ya existe otro usuario con ese email.', 'danger')
+            return render_template('config/perfil.html')
+        if Usuario.query.filter(Usuario.usuario == usuario, Usuario.id != current_user.id).first():
+            flash('Ya existe otro usuario con ese nombre de usuario.', 'danger')
+            return render_template('config/perfil.html')
+        current_user.email = email
+        current_user.usuario = usuario
+        db.session.commit()
+        flash('Perfil actualizado correctamente.', 'success')
+        return redirect(url_for('main.mi_perfil'))
+    return render_template('config/perfil.html')
+
+
+@main.route('/config/cambiar-password', methods=['GET', 'POST'])
+@login_required
+def cambiar_mi_contrasena():
+    if request.method == 'POST':
+        actual = request.form.get('contrasena_actual', '')
+        nueva = request.form.get('nueva_contrasena', '').strip()
+        confirmar = request.form.get('confirmar_contrasena', '').strip()
+        if not check_password_hash(current_user.contrasena, actual):
+            flash('La contraseña actual no es correcta.', 'danger')
+            return render_template('config/cambiar_contrasena.html', es_admin=False)
+        if not nueva or not confirmar:
+            flash('Debe completar los campos de nueva contraseña.', 'danger')
+            return render_template('config/cambiar_contrasena.html', es_admin=False)
+        if nueva != confirmar:
+            flash('Las contraseñas nuevas no coinciden.', 'danger')
+            return render_template('config/cambiar_contrasena.html', es_admin=False)
+        if len(nueva) < 6:
+            flash('La contraseña debe tener al menos 6 caracteres.', 'danger')
+            return render_template('config/cambiar_contrasena.html', es_admin=False)
+        current_user.contrasena = generate_password_hash(nueva)
+        db.session.commit()
+        flash('Contraseña actualizada correctamente.', 'success')
+        return redirect(url_for('main.dashboard'))
+    return render_template('config/cambiar_contrasena.html', usuario=current_user, es_admin=False)

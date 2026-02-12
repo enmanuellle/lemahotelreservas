@@ -1,6 +1,6 @@
 {% extends 'dashboard.html' %}
 
-{% block title %}Ventas · Hotel System{% endblock %}
+{% block title %}Ventas · lemahotel{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -25,6 +25,7 @@
                                 <th>Cliente</th>
                                 <th>Usuario</th>
                                 <th>Tipo</th>
+                                <th>Método de pago</th>
                                 <th>Total (USD)</th>
                                 <th>Total (Bs)</th>
                                 <th>Estado</th>
@@ -39,6 +40,7 @@
                                 <td>{{ v.cliente.nombre }} {{ v.cliente.apellido }}</td>
                                 <td>{{ v.usuario.nombre }} {{ v.usuario.apellido }}</td>
                                 <td>{{ v.tipo|replace('_', ' ')|capitalize }}</td>
+                                <td>{{ metodos_pago_dict.get(v.metodo_pago, v.metodo_pago or '—') }}</td>
                                 <td>{{ v.total_usd }}</td>
                                 <td>{{ v.total_bs }}</td>
                                 <td>
@@ -59,7 +61,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="9" class="text-center text-muted">No hay ventas registradas.</td>
+                                <td colspan="10" class="text-center text-muted">No hay ventas registradas.</td>
                             </tr>
                             {% endfor %}
                         </tbody>

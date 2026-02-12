@@ -1,0 +1,54 @@
+{% extends 'dashboard.html' %}
+
+{% block title %}{{ 'Cambiar contraseña' if es_admin and usuario else 'Cambiar mi contraseña' }} · lemahotel{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 mb-3 d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">
+            {% if es_admin and usuario %}
+            Cambiar contraseña de {{ usuario.nombre }} {{ usuario.apellido }}
+            {% else %}
+            Cambiar mi contraseña
+            {% endif %}
+        </h4>
+        <a href="{{ url_for('main.lista_usuarios') if es_admin else url_for('main.dashboard') }}" class="btn btn-outline-secondary">
+            <i class="bx bx-arrow-back"></i> Volver
+        </a>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Nueva contraseña</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% if not es_admin %}
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña actual</label>
+                        <input type="password" name="contrasena_actual" class="form-control" required
+                               placeholder="Ingrese su contraseña actual" autocomplete="current-password">
+                    </div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label">Nueva contraseña</label>
+                        <input type="password" name="nueva_contrasena" class="form-control" required minlength="6"
+                               placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirmar nueva contraseña</label>
+                        <input type="password" name="confirmar_contrasena" class="form-control" required minlength="6"
+                               placeholder="Repita la nueva contraseña" autocomplete="new-password">
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bx bx-lock"></i> Actualizar contraseña
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

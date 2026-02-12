@@ -1,6 +1,6 @@
 {% extends 'dashboard.html' %}
 
-{% block title %}{{ 'Editar' if reservacion else 'Nueva' }} Reservación · Hotel System{% endblock %}
+{% block title %}{{ 'Editar' if reservacion else 'Nueva' }} Reservación · lemahotel{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -24,6 +24,9 @@
                     No hay tasa de cambio activa. Los montos en Bs se calcularán cuando exista una.
                 </p>
                 {% endif %}
+                <p class="text-muted small mb-0 mt-1">
+                    <i class="bx bx-info-circle"></i> La habitación debe estar disponible en las fechas elegidas; se validará al guardar.
+                </p>
             </div>
             <div class="card-body">
                 <form method="post">
@@ -47,10 +50,12 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Habitación</label>
-                            <select name="habitacion_id" class="form-select" required>
+                            <select id="selectHabitacion" name="habitacion_id" class="form-select" required>
                                 <option value="">Seleccione...</option>
                                 {% for h in habitaciones %}
                                 <option value="{{ h.id }}"
+                                    data-precio-usd="{{ (h.tipo.precio_por_noche_usd if h.tipo else 0) | tojson }}"
+                                    data-precio-bs="{{ (h.tipo.precio_por_noche_bs if h.tipo else 0) | tojson }}"
                                     {% if reservacion and reservacion.habitacion_id == h.id %}selected{% endif %}>
                                     Hab. {{ h.numero }} ({{ h.tipo.nombre if h.tipo else 'Sin tipo' }})
                                 </option>
@@ -65,27 +70,35 @@
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Fecha de Entrada</label>
-                            <input type="date" name="fecha_entrada" class="form-control" required
+                            <input type="date" id="fechaEntrada" name="fecha_entrada" class="form-control" required
                                    value="{{ reservacion.fecha_entrada if reservacion else '' }}">
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Fecha de Salida</label>
-                            <input type="date" name="fecha_salida" class="form-control" required
+                            <input type="date" id="fechaSalida" name="fecha_salida" class="form-control" required
                                    value="{{ reservacion.fecha_salida if reservacion else '' }}">
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Precio por noche (USD)</label>
-                            <input type="number" step="0.01" class="form-control"
-                                   value="{{ reservacion.precio_por_noche_usd if reservacion else '' }}" readonly
-                                   placeholder="Se tomará del tipo de habitación">
+                            <input type="number" step="0.01" id="precioNocheUsd" class="form-control" readonly
+                                   value="{{ reservacion.precio_por_noche_usd if reservacion else '' }}"
+                                   placeholder="Seleccione habitación">
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Precio por noche (Bs)</label>
-                            <input type="number" step="0.01" class="form-control"
-                                   value="{{ reservacion.precio_por_noche_bs if reservacion else '' }}" readonly
-                                   placeholder="Se calculará automáticamente">
+                            <input type="number" step="0.01" id="precioNocheBs" class="form-control" readonly
+                                   value="{{ reservacion.precio_por_noche_bs if reservacion else '' }}"
+                                   placeholder="Se calculará con la tasa">
+                        </div>
+                    </div>
+                    <div class="alert alert-light border mb-3" id="resumenPrecio">
+                        <h6 class="mb-2"><i class="bx bx-calculator"></i> Resumen según habitación y fechas</h6>
+                        <div class="row small">
+                            <div class="col-md-4"><strong>Noches:</strong> <span id="numNoches">—</span></div>
+                            <div class="col-md-4"><strong>Total (USD):</strong> <span id="totalUsd">—</span></div>
+                            <div class="col-md-4"><strong>Total (Bs):</strong> <span id="totalBs">—</span></div>
                         </div>
                     </div>
                     <div class="mb-3">
@@ -163,7 +176,54 @@
 {% block extra_js %}
 {{ super() }}
 <script>
+var habitacionesPrecios = {{ habitaciones_precios | tojson }};
+var tasaBsResumen = {{ (tasa_actual.tasa_bs_por_usd if tasa_actual else 0) | tojson }};
+</script>
+<script>
 document.addEventListener('DOMContentLoaded', function () {
+    var tasaBs = typeof tasaBsResumen !== 'undefined' ? tasaBsResumen : 0;
+    var preciosPorHab = typeof habitacionesPrecios !== 'undefined' ? habitacionesPrecios : {};
+
+    function actualizarPrecioYResumen() {
+        var selHab = document.getElementById('selectHabitacion');
+        var fechaEntrada = document.getElementById('fechaEntrada');
+        var fechaSalida = document.getElementById('fechaSalida');
+        var precioNocheUsd = document.getElementById('precioNocheUsd');
+        var precioNocheBs = document.getElementById('precioNocheBs');
+        var numNochesEl = document.getElementById('numNoches');
+        var totalUsdEl = document.getElementById('totalUsd');
+        var totalBsEl = document.getElementById('totalBs');
+
+        if (!selHab || !fechaEntrada || !fechaSalida) return;
+
+        var habId = selHab.value;
+        var precios = preciosPorHab[habId] || {};
+        var precioUsd = Number(precios.precio_usd) || 0;
+        var precioBs = Number(precios.precio_bs) || (precioUsd * tasaBs);
+
+        if (precioNocheUsd) precioNocheUsd.value = precioUsd ? precioUsd.toFixed(2) : '';
+        if (precioNocheBs) precioNocheBs.value = precioBs ? precioBs.toFixed(2) : '';
+
+        var fe = fechaEntrada.value ? new Date(fechaEntrada.value) : null;
+        var fs = fechaSalida.value ? new Date(fechaSalida.value) : null;
+        var noches = 0;
+        if (fe && fs && fs > fe) {
+            noches = Math.round((fs - fe) / (1000 * 60 * 60 * 24));
+        }
+
+        if (numNochesEl) numNochesEl.textContent = noches || '—';
+        if (totalUsdEl) totalUsdEl.textContent = (noches && precioUsd) ? (noches * precioUsd).toFixed(2) + ' USD' : '—';
+        if (totalBsEl) totalBsEl.textContent = (noches && (precioBs || (precioUsd * tasaBs))) ? (noches * (precioBs || precioUsd * tasaBs)).toFixed(2) + ' Bs' : '—';
+    }
+
+    var selectHabitacion = document.getElementById('selectHabitacion');
+    var fechaEntrada = document.getElementById('fechaEntrada');
+    var fechaSalida = document.getElementById('fechaSalida');
+    if (selectHabitacion) selectHabitacion.addEventListener('change', actualizarPrecioYResumen);
+    if (fechaEntrada) { fechaEntrada.addEventListener('change', actualizarPrecioYResumen); fechaEntrada.addEventListener('input', actualizarPrecioYResumen); }
+    if (fechaSalida) { fechaSalida.addEventListener('change', actualizarPrecioYResumen); fechaSalida.addEventListener('input', actualizarPrecioYResumen); }
+    actualizarPrecioYResumen();
+
     const formNuevoCliente = document.getElementById('formNuevoCliente');
     const selectCliente = document.getElementById('selectCliente');
 
@@ -185,25 +245,39 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            fetch('/api/clientes', {
+            fetch('{{ url_for("api.api_crear_cliente") }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
+                credentials: 'same-origin',
                 body: JSON.stringify(payload),
             })
                 .then(async (response) => {
-                    const data = await response.json().catch(() => ({}));
+                    let data = {};
+                    const contentType = response.headers.get('Content-Type') || '';
+                    if (contentType.indexOf('application/json') !== -1) {
+                        try {
+                            data = await response.json();
+                        } catch (e) {
+                            data = {};
+                        }
+                    }
                     if (!response.ok) {
                         const msg = data.error || 'Error al crear el cliente.';
                         alert(msg);
+                        return;
+                    }
+                    if (data.id == null || data.id === undefined) {
+                        alert('El cliente se creó pero la respuesta no fue correcta. Recargue la página para verlo en la lista.');
                         return;
                     }
 
                     // Agregar el cliente al select y seleccionarlo
                     const option = document.createElement('option');
                     option.value = data.id;
-                    option.textContent = data.nombre + ' ' + data.apellido + ' - ' + data.documento_identidad;
+                    option.textContent = (data.nombre || '') + ' ' + (data.apellido || '') + ' - ' + (data.documento_identidad || '');
                     option.selected = true;
                     selectCliente.appendChild(option);
 
@@ -215,8 +289,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Limpiar formulario
                     formNuevoCliente.reset();
                 })
-                .catch(() => {
+                .catch(function (err) {
                     alert('Error de conexión al crear el cliente.');
+                    console.error(err);
                 });
         });
     }
