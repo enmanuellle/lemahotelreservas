@@ -746,10 +746,15 @@ def api_detalle_reservacion(reservacion_id):
 
 @api.route('/reservaciones', methods=['POST'])
 def api_crear_reservacion():
-    """Crea una reservación desde un agente externo (por ejemplo, n8n)."""
+    """
+    Crea una reservación desde un agente externo (por ejemplo, n8n).
+    El precio por noche se obtiene del tipo de la habitación seleccionada; no es necesario enviarlo.
+    Campos requeridos: cliente_id, habitacion_id, usuario_id, fecha_entrada, fecha_salida.
+    Opcionales: estado, observaciones.
+    """
     data = request.get_json(silent=True) or {}
 
-    requeridos = ['cliente_id', 'habitacion_id', 'usuario_id', 'fecha_entrada', 'fecha_salida', 'precio_por_noche_usd']
+    requeridos = ['cliente_id', 'habitacion_id', 'usuario_id', 'fecha_entrada', 'fecha_salida']
     faltantes = [c for c in requeridos if c not in data]
     if faltantes:
         return jsonify({'error': f'Faltan campos requeridos: {", ".join(faltantes)}'}), 400
@@ -757,6 +762,16 @@ def api_crear_reservacion():
     tasa_actual = _obtener_tasa_actual()
     if not tasa_actual:
         return jsonify({'error': 'No hay tasa de cambio activa para calcular precios en Bs'}), 400
+
+    habitacion = Habitacion.query.get(data['habitacion_id'])
+    if not habitacion:
+        return jsonify({'error': 'Habitación no encontrada'}), 404
+    if not habitacion.tipo:
+        return jsonify({'error': 'La habitación no tiene un tipo asociado con precio definido'}), 400
+
+    precio_por_noche_usd = _to_decimal(habitacion.tipo.precio_por_noche_usd or 0)
+    if precio_por_noche_usd <= 0:
+        return jsonify({'error': 'El tipo de habitación no tiene precio por noche configurado'}), 400
 
     fecha_entrada = data.get('fecha_entrada')
     fecha_salida = data.get('fecha_salida')
@@ -771,7 +786,6 @@ def api_crear_reservacion():
         return jsonify({'error': 'La habitación no está disponible en las fechas seleccionadas'}), 409
 
     try:
-        precio_por_noche_usd = _to_decimal(data.get('precio_por_noche_usd'))
         precio_por_noche_bs = precio_por_noche_usd * _to_decimal(tasa_actual.tasa_bs_por_usd)
 
         reservacion = Reservacion(
