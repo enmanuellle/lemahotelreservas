@@ -631,6 +631,68 @@ def actualizar_precios_con_tasa():
     return redirect(url_for('main.lista_tasas'))
 
 
+# ---------- API: Tipos de habitación (precios) ----------
+@api.route('/tipos-habitacion', methods=['GET'])
+def api_lista_tipos_habitacion():
+    """
+    Lista los tipos de habitación con sus precios por noche (USD y Bs).
+    Útil para mostrar tarifas o calcular totales antes de reservar.
+    """
+    tipos = TipoHabitacion.query.filter_by(activo=True).order_by(TipoHabitacion.nombre).all()
+    return jsonify([
+        {
+            'id': t.id,
+            'nombre': t.nombre,
+            'descripcion': t.descripcion,
+            'precio_por_noche_usd': str(t.precio_por_noche_usd),
+            'precio_por_noche_bs': str(t.precio_por_noche_bs),
+        }
+        for t in tipos
+    ])
+
+
+# ---------- API: Habitaciones disponibles por periodo ----------
+@api.route('/habitaciones/disponibles', methods=['GET'])
+def api_habitaciones_disponibles():
+    """
+    Devuelve las habitaciones disponibles en un periodo de tiempo.
+    Query params: fecha_entrada (YYYY-MM-DD), fecha_salida (YYYY-MM-DD).
+    Cada habitación incluye id, numero, tipo, precio por noche (USD/Bs).
+    """
+    fecha_entrada = request.args.get('fecha_entrada')
+    fecha_salida = request.args.get('fecha_salida')
+    if not fecha_entrada or not fecha_salida:
+        return jsonify({'error': 'Se requieren los parámetros fecha_entrada y fecha_salida (formato YYYY-MM-DD)'}), 400
+
+    fe = _parse_fecha(fecha_entrada)
+    fs = _parse_fecha(fecha_salida)
+    if fe is None or fs is None:
+        return jsonify({'error': 'Fechas inválidas. Use formato YYYY-MM-DD'}), 400
+    if fe >= fs:
+        return jsonify({'error': 'La fecha de salida debe ser posterior a la fecha de entrada'}), 400
+
+    habitaciones = Habitacion.query.all()
+    disponibles = []
+    for h in habitaciones:
+        if _habitacion_disponible(h.id, fecha_entrada, fecha_salida):
+            tipo = h.tipo
+            disponibles.append({
+                'id': h.id,
+                'numero': h.numero,
+                'piso': h.piso,
+                'tipo_id': tipo.id if tipo else None,
+                'tipo_nombre': tipo.nombre if tipo else None,
+                'precio_por_noche_usd': str(tipo.precio_por_noche_usd) if tipo and tipo.precio_por_noche_usd is not None else None,
+                'precio_por_noche_bs': str(tipo.precio_por_noche_bs) if tipo and tipo.precio_por_noche_bs is not None else None,
+            })
+    return jsonify({
+        'fecha_entrada': fecha_entrada,
+        'fecha_salida': fecha_salida,
+        'habitaciones': disponibles,
+        'total': len(disponibles),
+    })
+
+
 # ---------- API: Tasas ----------
 @api.route('/tasas/actual', methods=['GET'])
 def api_tasa_actual():
